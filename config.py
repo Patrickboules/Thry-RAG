@@ -83,11 +83,11 @@ class QdrantManager:
 redis_manager = RedisManager()
 qdrant_manager = QdrantManager()
 
-async def get_redis_manager() -> RedisManager:
+async def get_Redis_Client() -> Redis:
     """Returns the Redis client from the instance"""
     return redis_manager.get_client()
 
-def get_Qdrant_manager()-> QdrantManager:
+def get_Qdrant_Client()-> QdrantClient:
     """Returns the Redis client from the instance"""
     return qdrant_manager.get_client()
 
