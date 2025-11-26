@@ -35,7 +35,7 @@ def get_settings() -> Settings:
 class RedisManager:
     """Redis connection manager"""
     def __init__(self):
-        self._client: QdrantClient | None = None
+        self._client: Redis | None = None
 
     async def get_client(self) -> Redis:
         """Get or create Redis client"""
@@ -67,7 +67,7 @@ class QdrantManager:
     def get_client(self) -> QdrantClient:
         """Initialize Qdrant Connection"""
         if self._client is None:
-            settings = settings()
+            settings = get_settings()
             Qdrant_Client = QdrantClient(
             url=settings.QDRANT_URL,
             api_key=settings.QDRANT_API_KEY,
