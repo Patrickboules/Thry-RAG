@@ -9,11 +9,15 @@ from langchain_qdrant import QdrantVectorStore
 from langchain_redis import RedisChatMessageHistory
 from langchain_google_genai import ChatGoogleGenerativeAI,GoogleGenerativeAIEmbeddings
 from dotenv import load_dotenv
-import os
-from config import RedisManager,QdrantManager
+from config import get_Qdrant_Client,get_Redis_Client
 
-Redis = RedisManager().get_client()
-Qdrant = QdrantManager().get_client()
+
+Redis_Client = get_Redis_Client()
+Qdrant_Client = get_Qdrant_Client()
+
+Redis_Client.set("Test","testing")
+print(Redis_Client.get("Test"))
+
 load_dotenv()
 
 tools = []
