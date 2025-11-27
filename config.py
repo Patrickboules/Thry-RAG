@@ -1,8 +1,8 @@
 from dotenv import load_dotenv
 from functools import lru_cache
 
-from redis.asyncio import Redis
-import redis.asyncio as aioredis
+from redis import Redis
+
 
 from qdrant_client import QdrantClient
 from pydantic_settings import BaseSettings
@@ -37,12 +37,12 @@ class RedisManager:
     def __init__(self):
         self._client: Redis | None = None
 
-    async def get_client(self) -> Redis:
+    def get_client(self) -> Redis:
         """Get or create Redis client"""
         if self._client is None:
             settings = get_settings()
 
-            self._client = aioredis.from_url(
+            self._client = Redis.from_url(
                 settings.REDIS_URL,
                 encoding="utf-8",
                 decode_responses=True
@@ -50,11 +50,11 @@ class RedisManager:
             
             return self._client
     
-    async def close(self):
+    def close(self):
         """Closes Redis Connection"""
 
         if self._client:
-            await self._client.close()
+            self._client.close()
             self._client = None
 
 
@@ -68,10 +68,11 @@ class QdrantManager:
         """Initialize Qdrant Connection"""
         if self._client is None:
             settings = get_settings()
-            Qdrant_Client = QdrantClient(
+            self._client = QdrantClient(
             url=settings.QDRANT_URL,
             api_key=settings.QDRANT_API_KEY,
             )
+        return self._client
 
     def close(self):
         """Closes Qdrant Connection"""
@@ -83,7 +84,7 @@ class QdrantManager:
 redis_manager = RedisManager()
 qdrant_manager = QdrantManager()
 
-async def get_Redis_Client() -> Redis:
+def get_Redis_Client() -> Redis:
     """Returns the Redis client from the instance"""
     return redis_manager.get_client()
 
