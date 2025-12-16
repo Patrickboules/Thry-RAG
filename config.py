@@ -1,28 +1,20 @@
 from dotenv import load_dotenv
 from functools import lru_cache
 
-from redis import Redis
-
 
 from qdrant_client import QdrantClient
 from pydantic_settings import BaseSettings
-import os
 
 load_dotenv()
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "THRY RAG"
-
-    REDIS_URL: str
     
     QDRANT_URL: str
     QDRANT_API_KEY: str
     
-
+    DATABASE_URL: str
     GOOGLE_API_KEY: str
-
-    SESSION_EXPIRE_SECONDS: int = 900  # 15 mins
-    CHAT_HISTORY_MAX_MESSAGES: int = 50
     
     class Config:
         env_file = ".env"
@@ -32,35 +24,8 @@ def get_settings() -> Settings:
     """Get cached settings instance"""
     return Settings()
 
-class RedisManager:
-    """Redis connection manager"""
-    def __init__(self):
-        self._client: Redis | None = None
-
-    def get_client(self) -> Redis:
-        """Get or create Redis client"""
-        if self._client is None:
-            settings = get_settings()
-
-            self._client = Redis.from_url(
-                settings.REDIS_URL,
-                encoding="utf-8",
-                decode_responses=True
-                )
-            
-            return self._client
-    
-    def close(self):
-        """Closes Redis Connection"""
-
-        if self._client:
-            self._client.close()
-            self._client = None
-
-
 class QdrantManager:
     """Qdrant connection Manager"""
-
     def __init__(self):
         self._client: QdrantClient | None = None
     
@@ -81,15 +46,11 @@ class QdrantManager:
             self._client.close()
             self._client = None
 
-redis_manager = RedisManager()
+
 qdrant_manager = QdrantManager()
 
-def get_Redis_Client() -> Redis:
-    """Returns the Redis client from the instance"""
-    return redis_manager.get_client()
-
 def get_Qdrant_Client()-> QdrantClient:
-    """Returns the Redis client from the instance"""
+    """Returns the Qdrant client from the instance"""
     return qdrant_manager.get_client()
 
 
