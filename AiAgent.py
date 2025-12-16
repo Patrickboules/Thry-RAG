@@ -19,11 +19,10 @@ llm = ChatGoogleGenerativeAI(
     convert_system_message_to_human=True,
 )
 
-# intialize PostgresDatabase
-history = PostgresChatMessageHistory(
-    connection_string=os.getenv("DATABASE_URL"),
-    session_id="user_123"
-)
+# history = PostgresChatMessageHistory(
+#     connection_string=os.getenv("DATABASE_URL"),
+#     session_id="user_123"
+# )
 
 embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-001")
 
@@ -61,5 +60,8 @@ llm = llm.bind_tools(tools)
 class AgentState(TypedDict):
     messages:Sequence[Annotated[BaseMessage,add_messages]]
 
-def should_continue():
-    pass
+def should_continue(state: AgentState):
+    """Check if the last message contains tool calls."""
+    result = state['messages'][-1]
+    return hasattr(result, 'tool_calls') and len(result.tool_calls) > 0
+
