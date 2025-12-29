@@ -5,9 +5,9 @@ from operator import add as add_messages
 from langchain_core.tools import tool
 from langchain_qdrant import QdrantVectorStore
 from langchain_postgres import PostgresChatMessageHistory
+import psycopg
 from langchain_google_genai import ChatGoogleGenerativeAI,GoogleGenerativeAIEmbeddings
 from dotenv import load_dotenv
-# from config import get_Qdrant_Client
 import os
 
 load_dotenv()
@@ -19,11 +19,6 @@ llm = ChatGoogleGenerativeAI(
     convert_system_message_to_human=True,
 )
 
-# history = PostgresChatMessageHistory(
-#     connection_string=os.getenv("DATABASE_URL"),
-#     session_id="user_123"
-# )
-
 embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-001")
 
 qdrant = QdrantVectorStore.from_existing_collection(
@@ -31,6 +26,12 @@ qdrant = QdrantVectorStore.from_existing_collection(
     collection_name="thry_rag",
     url=os.getenv("QDRANT_URL"),
 )
+
+connection_string = os.getenv("DATABASE_URL")
+sync_connection = psycopg.connect(connection_string)
+
+PostgresChatMessageHistory.create_tables(sync_connection)
+
 
 retriever = qdrant.as_retriever(
     search_type="similarity",
@@ -58,10 +59,51 @@ llm = llm.bind_tools(tools)
 
 
 class AgentState(TypedDict):
+    session_id:str
     messages:Sequence[Annotated[BaseMessage,add_messages]]
 
 def should_continue(state: AgentState):
     """Check if the last message contains tool calls."""
     result = state['messages'][-1]
     return hasattr(result, 'tool_calls') and len(result.tool_calls) > 0
+
+system_prompt = """
+You are an intelligent AI assistant specialized in investment education, trained on the Thndr Learn educational materials.
+
+Your role:
+- Help users learn about investing concepts, strategies, and best practices from the Thndr Learn curriculum
+- Explain investment terminology, market principles, and financial concepts in a clear, educational manner
+- Guide beginners through their investment learning journey using the knowledge from Thndr's educational resources
+- Make multiple retrieval calls when needed to provide comprehensive investment education
+
+Guidelines:
+- Always cite specific sections from the Thndr Learn materials when explaining concepts
+- Break down complex investment topics into easy-to-understand explanations
+- Provide practical examples and scenarios when teaching investment principles
+- If a concept is not covered in the Thndr Learn materials, clearly state this
+- Encourage sound investment practices and learning-first approach
+- When explaining strategies, reference the specific lessons or chapters from the curriculum
+
+Your goal is to be a knowledgeable investment education assistant, helping users understand investing through the Thndr Learn framework. Focus on education, clarity, and building foundational investment knowledge.
+"""
+
+tools_dict = {our_tool.name: our_tool for our_tool in tools} 
+
+
+def call_llm(state: AgentState) -> AgentState:
+    """Function to call the LLM with the current state."""
+    messages = [SystemMessage(content=system_prompt)] + list(state['messages']) 
+
+    message = llm.invoke(messages)
+    history = PostgresChatMessageHistory(
+        table_name='UserMessages',
+        session_id=state['session_id'],
+        sync_connection=sync_connection
+    )
+
+    history.add_message(message)
+    return {
+        'session_id': state["session_id"],
+        'messages': [message]
+        }
 
