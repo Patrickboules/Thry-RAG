@@ -2,11 +2,14 @@ from typing import TypedDict,Sequence,Annotated
 from langgraph.graph import StateGraph,START,END
 from langchain_core.messages import BaseMessage,HumanMessage,SystemMessage,ToolMessage,AIMessage
 from operator import add as add_messages
+
 from langchain_core.tools import tool
-from langchain_qdrant import QdrantVectorStore
 from langchain_postgres import PostgresChatMessageHistory
-import psycopg
 from langchain_google_genai import ChatGoogleGenerativeAI,GoogleGenerativeAIEmbeddings
+from langchain_experimental.text_splitter import SemanticChunker
+from langchain_community.vectorstores import SupabaseVectorStore
+
+import psycopg
 from dotenv import load_dotenv
 import os
 
@@ -19,24 +22,17 @@ llm = ChatGoogleGenerativeAI(
     convert_system_message_to_human=True,
 )
 
+#intialize Google Gemini Embeddings Model
 embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-001")
 
-qdrant = QdrantVectorStore.from_existing_collection(
-    embedding=embeddings,
-    collection_name="thry_rag",
-    url=os.getenv("QDRANT_URL"),
-)
 
+#intialize Postgres Chat DB
 connection_string = os.getenv("DATABASE_URL")
 sync_connection = psycopg.connect(connection_string)
 
-PostgresChatMessageHistory.create_tables(sync_connection)
+#intialize Semantic Chunking
+chunker = SemanticChunker(embeddings, breakpoint_threshold_type="percentile")
 
-
-retriever = qdrant.as_retriever(
-    search_type="similarity",
-    search_kwargs={"k": 5} 
-)
 
 @tool
 def retriever_tool(query:str) -> str:
@@ -102,8 +98,5 @@ def call_llm(state: AgentState) -> AgentState:
     )
 
     history.add_message(message)
-    return {
-        'session_id': state["session_id"],
-        'messages': [message]
-        }
+    return {'messages': [message]}
 
