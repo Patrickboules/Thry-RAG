@@ -1,17 +1,17 @@
-from langchain_experimental.text_splitter import SemanticChunker
-from langchain_postgres.vectorstores import PGVector
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from database import get_database
 from dotenv import load_dotenv
-import os
 
 load_dotenv()
-
-#intialize Google Gemma Embeddings Model
-embeddings = embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
+#initialize VectorDatabase
+vector_space = get_database().get_pgvector()
 
 #intialize Semantic Chunking
-chunker = SemanticChunker(embeddings, breakpoint_threshold_type="percentile")
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=500,
+    chunk_overlap=100
+)
 
 pdf_path = "./Thndr-Learn.pdf"
 
@@ -23,16 +23,10 @@ try:
 except Exception as e:
     raise
 
-pages_split = chunker.split_documents(pages)
+pages_split = text_splitter.split_documents(pages)
 
 try:
-    vector_space = PGVector(
-        connection=os.getenv("DATABASE_URL"),
-        embeddings=embeddings,
-        collection_name='thry_rag'
-    )
-
     vector_space.add_documents(pages_split)
 except Exception as e:
-    print(f"Error setting up Supabase PgVectorDB: {str(e)}")
+    print(f"Error setting up PgVectorDB: {str(e)}")
     raise
