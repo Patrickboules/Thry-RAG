@@ -1,14 +1,17 @@
 from langgraph.graph import StateGraph,START,END
 from operator import add as add_messages
 from typing import TypedDict,Sequence,Annotated
-from tools import MyTools
 from langchain_core.messages import BaseMessage,HumanMessage,SystemMessage
 from langgraph.prebuilt import tools_condition,ToolNode
 from llm import LLM
+from database import get_database
 
 llm_class = LLM()
 llm = llm_class.get_llm()
 tools = llm_class.get_tools()
+
+postgres_checkpointer = get_database().get_PostgresSaver
+
 
 system_prompt = """
 You are Thry, an intelligent AI assistant specialized in investment education, trained on the Thndr Learn educational materials.
@@ -59,11 +62,22 @@ class ThryAgent:
         self.__graph.add_edge("tools", "llm")
         self.__graph.set_entry_point("llm")
 
-        self.__rag_agent = self.__graph.compile()
+        self.__rag_agent = self.__graph.compile(checkpointer=postgres_checkpointer)
 
 
-    def run(self,query:str)->str:            
+    def run(self ,query:str, thread_id:str)->str:            
         messages = [HumanMessage(content=query)]
-        result = self.__rag_agent.invoke({"messages": messages})
+
+        config = {
+            "configurable": 
+            {
+                "thread_id": thread_id
+            }
+        }
+
+        result = self.__rag_agent.invoke(
+            {"messages": messages},
+            config=config
+        )
         return result
 

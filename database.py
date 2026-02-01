@@ -58,6 +58,9 @@ class Database:
     
     def get_reranker(self)-> InferenceClient:
         return self.__reranker
+    
+    def get_PostgresSaver(self)-> PostgresSaver:
+        return self.__checkpointer
 
     def close(self):
         """Close the connection pool to prevent shutdown warnings."""
