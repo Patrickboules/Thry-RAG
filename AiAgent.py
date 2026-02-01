@@ -10,7 +10,7 @@ llm_class = LLM()
 llm = llm_class.get_llm()
 tools = llm_class.get_tools()
 
-postgres_checkpointer = get_database().get_PostgresSaver
+postgres_checkpointer = get_database().get_PostgresSaver()
 
 
 system_prompt = """
