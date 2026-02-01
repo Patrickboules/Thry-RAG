@@ -1,29 +1,48 @@
 from langchain_core.tools import tool
 from database import get_database
 
-vector_space = get_database().get_pgvector()
 
-retriever = vector_space.as_retriever(
-    search_type="similarity",
-    search_kwargs={"k": 7}
-)
+def _create_retriever_tool():
+    """Factory function that creates the retriever tool with captured dependencies."""
+    database = get_database()
+    vector_space = database.get_pgvector()
+    reranker_model = database.get_reranker()
 
-@tool
-def retriever_tool(query: str) -> str:
-    """
-    This tool searches and returns the information from the Thndr Learn Content.
-    """
+    retriever = vector_space.as_retriever(
+        search_type="similarity",
+        search_kwargs={"k": 10}
+    )
 
-    docs = retriever.invoke(query)
+    @tool
+    def retriever_tool(query: str) -> str:
+        """
+        This tool searches and returns the information from the Thndr Learn Content.
+        """
+        docs = retriever.invoke(query)
 
-    if not docs:
-        return "I found no relevant information in the Thndr Learn Content"
-    
-    results = []
-    for i, doc in enumerate(docs):
-        results.append(f"Document {i+1}:\n{doc.page_content}")
-    
-    return "\n\n".join(results)
+        if not docs:
+            return "I found no relevant information in the Thndr Learn Content"
 
-def get_tools():
-    return [retriever_tool]
+        scores = []
+        for doc in docs:
+            result = reranker_model.text_classification(f"{query} [SEP] {doc.page_content}")
+            scores.append(result[0]['score'])
+
+        # Sort by score and get top 3
+        ranked_docs = sorted(zip(scores, docs), reverse=True)[:3]
+
+        return "\n\n".join([f"Document {i+1}:\n{doc.page_content}" for i, (score, doc) in enumerate(ranked_docs)])
+
+    return retriever_tool
+
+
+class MyTools:
+    def __init__(self):
+        self.__retriever_tool = _create_retriever_tool()
+
+    def get_tools(self):
+        return [self.__retriever_tool]
+
+
+my_tools = MyTools()
+

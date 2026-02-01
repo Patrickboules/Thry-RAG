@@ -4,6 +4,7 @@ from database import get_database
 from dotenv import load_dotenv
 
 load_dotenv()
+
 #initialize VectorDatabase
 vector_space = get_database().get_pgvector()
 
