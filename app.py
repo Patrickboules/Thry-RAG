@@ -13,6 +13,7 @@ from pydantic import BaseModel,field_validator
 import uuid
 import logging
 import os
+import hmac
 
 logging.basicConfig(
     level=logging.INFO,
@@ -63,9 +64,9 @@ async def global_exception_handler(request, exc):
     )
 
 async def verify_api_key(api_key: str = Header(None)):
-    if api_key != os.getenv("THRY_API_KEY"):
-        raise HTTPException(status_code=403, detail="Forbidden: Invalid API Key")
-    return api_key
+    expected = os.getenv("THRY_API_KEY", "")                                                                                                                                                                       
+    if not api_key or not hmac.compare_digest(api_key, expected):                                                                                                                                                  
+        raise HTTPException(status_code=403, detail="Forbidden: Invalid API Key")         
 
 agent = ThryAgent()
 limiter = Limiter(key_func=get_remote_address) 
