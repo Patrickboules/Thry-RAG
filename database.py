@@ -20,7 +20,8 @@ class Database:
     def __init__(self)-> Database:
         #initialize database string
         self.__dbconnection_string = os.getenv("DATABASE_URL")
-
+        if not self.__dbconnection_string:
+            raise ValueError("DATABASE_URL environment variable is not set")
         #intialize connection kawrgs
         self.__connection_kwargs = {
                             "autocommit": True,      
@@ -32,6 +33,8 @@ class Database:
         self.__sync_connection_pool = ConnectionPool(
                     conninfo=self.__dbconnection_string,
                     max_size=20,
+                    min_size=5,
+                    timeout=30,
                     kwargs=self.__connection_kwargs
                 )
         #initialize Embedding Model
