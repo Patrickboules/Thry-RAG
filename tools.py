@@ -1,23 +1,21 @@
 from langchain_core.tools import tool
-from database import get_database
+from database import use_db
 
 
-def _create_retriever_tool():
-    """Factory function that creates the retriever tool with captured dependencies."""
-    database = get_database()
-    vector_space = database.get_pgvector()
-    reranker_model = database.get_reranker()
 
-    retriever = vector_space.as_retriever(
-        search_type="similarity",
-        search_kwargs={"k": 10}
-    )
+@tool
+def retriever_tool(query: str) -> str:
+    """
+    This tool searches and returns the information from the Thndr Learn Content.
+    """
+    with use_db() as database:
+        vector_space = database.get_pgvector()
+        reranker_model = database.get_reranker()
 
-    @tool
-    def retriever_tool(query: str) -> str:
-        """
-        This tool searches and returns the information from the Thndr Learn Content.
-        """
+        retriever = vector_space.as_retriever(
+            search_type="similarity",
+            search_kwargs={"k": 10}
+            )    
         docs = retriever.invoke(query)
 
         if not docs:
@@ -33,12 +31,9 @@ def _create_retriever_tool():
 
         return "\n\n".join([f"Document {i+1}:\n{doc.page_content}" for i, (score, doc) in enumerate(ranked_docs)])
 
-    return retriever_tool
-
-
 class MyTools:
     def __init__(self):
-        self.__retriever_tool = _create_retriever_tool()
+        self.__retriever_tool = retriever_tool
 
     def get_tools(self):
         return [self.__retriever_tool]
