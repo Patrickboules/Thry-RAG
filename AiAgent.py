@@ -37,7 +37,6 @@ Your goal is to be a knowledgeable, approachable investment education assistant,
 
 
 class AgentState(TypedDict):
-    session_id: str
     messages: Sequence[Annotated[BaseMessage, add_messages]]
 
 
