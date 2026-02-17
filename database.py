@@ -4,7 +4,6 @@ from contextlib import contextmanager
 from typing import Optional, Generator
 
 from dotenv import load_dotenv
-from huggingface_hub import InferenceClient
 from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_postgres.vectorstores import PGVector
 from langgraph.checkpoint.postgres import PostgresSaver
@@ -47,7 +46,7 @@ class Database:
             conninfo=self.__dbconnection_string,
             max_size=1,  # Single connection per serverless function instance
             min_size=0,  # Don't maintain persistent connections
-            timeout=10,  # Shorter timeout for serverless
+            timeout=15,  # Increased timeout for Neon Postgres connection pooler
             max_lifetime=300,  # Close connections after 5 minutes
             max_idle=60,  # Close idle connections after 1 minute
             kwargs=self.__connection_kwargs,
@@ -55,7 +54,6 @@ class Database:
 
         # Lazy initialization placeholders (initialized on first access)
         self.__embeddings: Optional[HuggingFaceEndpointEmbeddings] = None
-        self.__reranker: Optional[InferenceClient] = None
         self.__vector_db: Optional[PGVector] = None
         self.__checkpointer: Optional[PostgresSaver] = None
 
@@ -68,13 +66,6 @@ class Database:
                 provider="hf-inference"
             )
         return self.__embeddings
-
-    # Lazy property for Reranker - reduces cold start latency
-    @property
-    def __reranker_lazy(self) -> InferenceClient:
-        if self.__reranker is None:
-            self.__reranker = InferenceClient(model="BAAI/bge-reranker-v2-m3")
-        return self.__reranker
 
     # Lazy property for PGVector - reduces cold start latency
     @property
@@ -100,9 +91,6 @@ class Database:
     def get_embeddings(self) -> HuggingFaceEndpointEmbeddings:
         return self.__embeddings_lazy
 
-    def get_reranker(self) -> InferenceClient:
-        return self.__reranker_lazy
-
     def get_PostgresSaver(self) -> PostgresSaver:
         return self.__checkpointer_lazy
 
@@ -122,8 +110,6 @@ class Database:
         self.close()
         return False  # Don't suppress exceptions
 
-
-# Module-level instance for non-serverless environments (local development)
 # In Vercel serverless, create a new instance per request or use context manager
 _database_instance: Optional[Database] = None
 
@@ -134,23 +120,9 @@ def get_database() -> Database:
 
     For Vercel serverless: Create a new instance per request to avoid
     connection leaks across function invocations.
-
-    For local development: Reuse singleton instance.
     """
-    global _database_instance
 
-    # Check if we're in Vercel serverless environment
-    is_vercel = os.getenv("VERCEL") == "1" or os.getenv("VERCEL_ENV") is not None
-
-    if is_vercel:
-        # In serverless: Always create fresh instance
-        # Connection pool settings above ensure connections are short-lived
-        return Database()
-
-    # Local development: Use singleton pattern
-    if _database_instance is None:
-        _database_instance = Database()
-    return _database_instance
+    return Database()
 
 
 @contextmanager
@@ -161,21 +133,6 @@ def use_db() -> Generator[Database, None, None]:
     This is the RECOMMENDED way to use the database in Vercel serverless
     functions to prevent connection leaks.
 
-    Usage:
-        async def handler(request):
-            with use_db() as db:
-                vector_db = db.get_pgvector()
-                # ... do work ...
-            # Pool automatically closed here, even if exception occurs
-
-    For async handlers, use:
-        async def handler(request):
-            db = get_database()
-            try:
-                vector_db = db.get_pgvector()
-                # ... do work ...
-            finally:
-                db.close()
     """
     db = get_database()
     try:

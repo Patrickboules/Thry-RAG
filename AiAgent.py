@@ -1,14 +1,12 @@
-from langgraph.graph import StateGraph,START,END
+from langgraph.graph import StateGraph
 from operator import add as add_messages
-from typing import TypedDict,Sequence,Annotated
-from langchain_core.messages import BaseMessage,HumanMessage,SystemMessage
-from langgraph.prebuilt import tools_condition,ToolNode
+from typing import TypedDict, Sequence, Annotated
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langgraph.prebuilt import tools_condition, ToolNode
 from llm import LLM
-from database import use_db
+from database import get_database
+from functools import partial
 
-llm_class = LLM()
-llm = llm_class.get_llm()
-tools = llm_class.get_tools()
 
 
 system_prompt = """
@@ -37,21 +35,40 @@ Guidelines:
 Your goal is to be a knowledgeable, approachable investment education assistant, helping users understand investing through the Thndr Learn framework. Focus on education, clarity, building foundational investment knowledge, and empowering users to make informed investment decisions.
 """
 
-class AgentState(TypedDict):
-    session_id:str
-    messages:Sequence[Annotated[BaseMessage,add_messages]]
 
-def call_llm(state: AgentState) -> AgentState:
+class AgentState(TypedDict):
+    session_id: str
+    messages: Sequence[Annotated[BaseMessage, add_messages]]
+
+
+def call_llm(state: AgentState, llm) -> AgentState:
     """Function to call the LLM with the current state."""
-    messages = [SystemMessage(content=system_prompt)] + list(state['messages']) 
+    messages = [SystemMessage(content=system_prompt)] + list(state['messages'])
     message = llm.invoke(messages)
     return {'messages': [message]}
 
-class ThryAgent: 
+
+class ThryAgent:
+    """
+    Serverless-compatible RAG agent.
+
+    Each instance is created fresh per request in Vercel serverless to avoid:
+    - Shared state across invocations
+    - Database pool lifecycle issues
+    - Race conditions with concurrent requests (Fluid Compute)
+    """
+
     def __init__(self):
+        # Create LLM instance per agent instance (not global)
+        self.__llm_class = LLM()
+        self.__llm = self.__llm_class.get_llm()
+        self.__tools = self.__llm_class.get_tools()
+
         self.__graph = StateGraph(AgentState)
-        self.__graph.add_node("llm", call_llm)
-        self.__graph.add_node("tools", ToolNode(tools))
+
+        # Bind llm instance to the node
+        self.__graph.add_node("llm", partial(call_llm, llm=self.__llm))
+        self.__graph.add_node("tools", ToolNode(self.__tools))
 
         self.__graph.add_conditional_edges(
             "llm",
@@ -60,24 +77,28 @@ class ThryAgent:
         self.__graph.add_edge("tools", "llm")
         self.__graph.set_entry_point("llm")
 
+        self.db_manager = get_database()
+        self.checkpointer = self.db_manager.get_PostgresSaver()
 
+        self.rag_agent = self.__graph.compile(checkpointer=self.checkpointer)
 
-    def run(self ,query:str, thread_id:str)->str: 
-        with use_db() as database:
-            self.__rag_agent = self.__graph.compile(checkpointer=database.get_PostgresSaver())
-            
+    def run(self, query: str, thread_id: str) -> str:
+        try:
             messages = [HumanMessage(content=query)]
 
             config = {
-                "configurable": 
-                {
-                    "thread_id": thread_id
+                "configurable": {
+                    "thread_id": thread_id,
+                    "recursion_limit": 10
                 }
             }
 
-            result = self.__rag_agent.invoke(
+            result = self.rag_agent.invoke(
                 {"messages": messages},
                 config=config
             )
             return result
-
+        except Exception as e:
+            raise e
+        finally:
+            self.db_manager.close()

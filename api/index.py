@@ -4,8 +4,8 @@ warnings.filterwarnings("ignore", message=".*PyTorch.*TensorFlow.*")
 
 import sys
 import os
+import asyncio
 
-# Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi import FastAPI, Cookie, Response, HTTPException, Header, Depends, Request
@@ -15,8 +15,8 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from AiAgent import ThryAgent
+from config import validateEnv, get_uuid
 from pydantic import BaseModel, field_validator
-import uuid
 import logging
 import hmac
 
@@ -47,6 +47,7 @@ class QueryID(BaseModel):
             raise ValueError('Chat ID cannot be empty')
         return v.strip()
 
+validateEnv()
 
 app = FastAPI()
 
@@ -63,19 +64,18 @@ app.add_middleware(
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
-    logger.error(f"Unhandled exception: {str(exc)}", exc_info=True)
+    logger.error(f"Unhandled exception: {request.url.path}", exc_info=True)
     return JSONResponse(
         status_code=500,
         content={"detail": "Internal server error"}
     )
 
-async def verify_api_key(api_key: str = Header(None)):
+async def verify_api_key(api_key: str = Header(None, alias="Thry-Api-Key")):
     expected = os.getenv("THRY_API_KEY", "")
     if not api_key or not hmac.compare_digest(api_key, expected):
         raise HTTPException(status_code=403, detail="Forbidden: Invalid API Key")
 
-# Initialize agent
-agent = ThryAgent()
+# Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 
@@ -87,20 +87,25 @@ async def send_message(message: QueryID,
                        request: Request,
                        session_id: str = Cookie(None),
                        authorized: str = Depends(verify_api_key)):
+
     try:
         if not session_id:
-            session_id = str(uuid.uuid4())
+            session_id = str(get_uuid())
             response.set_cookie(
                 key="session_id",
                 value=session_id,
                 max_age=30 * 24 * 60 * 60,
                 httponly=True,
-                secure=os.getenv("ENVIRONMENT", "development") == "production",
-                samesite="lax"
+                secure=True,
             )
 
         thread_id = f"{session_id}:{message.chat_id}"
-        result = agent.run(message.query, thread_id)
+
+        # Create a new agent instance per request for Vercel serverless compatibility
+        agent = ThryAgent()
+
+        # Run the synchronous agent.run() in a thread pool to avoid blocking
+        result = await asyncio.to_thread(agent.run, message.query, thread_id)
 
         if not result or 'messages' not in result or not result["messages"]:
             logger.error("Agent returned invalid result")

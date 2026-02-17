@@ -1,6 +1,7 @@
 from langchain_groq import ChatGroq
 from langchain_core.tools import BaseTool
-from tools import my_tools
+from huggingface_hub import InferenceClient
+from tools import get_tools
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -19,7 +20,7 @@ class LLM:
         self.__llm = llm.bind_tools(self.__tools)
 
     def _fetch_tools(self) -> list[BaseTool]:
-        return my_tools.get_tools()
+        return get_tools()
 
     def get_llm(self)-> ChatGroq:
         return self.__llm
