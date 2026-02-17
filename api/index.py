@@ -11,9 +11,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import FastAPI, Cookie, Response, HTTPException, Header, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
+from upstash_redis import Redis
+from upstash_ratelimit import Ratelimit, FixedWindow
+
 from AiAgent import ThryAgent
 from config import validateEnv, get_uuid
 from pydantic import BaseModel, field_validator
@@ -49,9 +49,19 @@ class QueryID(BaseModel):
 
 validateEnv()
 
+redis = Redis.from_env()
 app = FastAPI()
 
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+ratelimit = Ratelimit(
+    redis=redis,
+    limiter=FixedWindow(max_requests=5, window=60),  # 5 req/min per IP
+)
+
+global_ratelimit = Ratelimit(
+    redis=redis,
+    limiter=FixedWindow(max_requests=60, window=60),  # 60 req/min globally
+)
+
 
 # CORS configuration
 app.add_middleware(
@@ -75,18 +85,34 @@ async def verify_api_key(api_key: str = Header(None, alias="Thry-Api-Key")):
     if not api_key or not hmac.compare_digest(api_key, expected):
         raise HTTPException(status_code=403, detail="Forbidden: Invalid API Key")
 
-# Initialize rate limiter
-limiter = Limiter(key_func=get_remote_address)
-app.state.limiter = limiter
-
+async def check_rate_limit(request: Request):
+    ip = request.client.host
+    
+    # Check per-IP limit
+    per_ip_response = ratelimit.limit(ip)
+    if not per_ip_response.allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many requests. Please slow down.",
+            headers={"Retry-After": "60"}
+        )
+    
+    # Check global limit
+    global_response = global_ratelimit.limit("global")
+    if not global_response.allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="Service is busy. Please try again shortly.",
+            headers={"Retry-After": "60"}
+        )
+    
 @app.post("/chat")
-@limiter.limit("60/minute", key_func=lambda r: "global")
-@limiter.limit("5/minute")
 async def send_message(message: QueryID,
                        response: Response,
                        request: Request,
                        session_id: str = Cookie(None),
-                       authorized: str = Depends(verify_api_key)):
+                       authorized: str = Depends(verify_api_key),
+                       _: None = Depends(check_rate_limit)):
 
     try:
         if not session_id:
@@ -97,6 +123,7 @@ async def send_message(message: QueryID,
                 max_age=30 * 24 * 60 * 60,
                 httponly=True,
                 secure=True,
+                samesite="lax"
             )
 
         thread_id = f"{session_id}:{message.chat_id}"
