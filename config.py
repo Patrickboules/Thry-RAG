@@ -27,10 +27,6 @@ validateEnv()
 
 def get_uuid():
     """
-    Generate a unique UUID using uuid.uuid4() for broad compatibility.
-
-    Note: uuid.uuid7() was previously used but requires Python 3.13+.
-    Using uuid.uuid4() for compatibility with Python 3.8+ which is
-    supported by Vercel's Python runtime.
+    Generate a unique UUID
     """
     return uuid.uuid7()
