@@ -79,7 +79,8 @@ class ThryAgent:
         self.__graph.add_edge("tools", "llm")
         self.__graph.set_entry_point("llm")
 
-        self.checkpointer = self.db_manager.get_PostgresSaver()
+        self.checkpointer = self.__db_manager.get_PostgresSaver()
+        self.checkpointer.setup()
 
         self.rag_agent = self.__graph.compile(checkpointer=self.checkpointer)
 
