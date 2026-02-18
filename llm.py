@@ -1,6 +1,6 @@
 from langchain_groq import ChatGroq
 from langchain_core.tools import BaseTool
-from huggingface_hub import InferenceClient
+from langchain_postgres.vectorstores import PGVector
 from tools import get_tools
 from dotenv import load_dotenv
 
@@ -19,8 +19,8 @@ class LLM:
         self.__tools = self._fetch_tools() 
         self.__llm = llm.bind_tools(self.__tools)
 
-    def _fetch_tools(self) -> list[BaseTool]:
-        return get_tools()
+    def _fetch_tools(self,vectordb:PGVector) -> list[BaseTool]:
+        return get_tools(vectordb)
 
     def get_llm(self)-> ChatGroq:
         return self.__llm

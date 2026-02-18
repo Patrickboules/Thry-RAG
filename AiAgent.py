@@ -79,7 +79,6 @@ class ThryAgent:
         self.__graph.set_entry_point("llm")
 
         self.checkpointer = self.__db_manager.get_PostgresSaver()
-        self.checkpointer.setup()
 
         self.rag_agent = self.__graph.compile(checkpointer=self.checkpointer)
 
@@ -88,9 +87,10 @@ class ThryAgent:
             messages = [HumanMessage(content=query)]
 
             config = {
+                "recursion_limit": 10,
                 "configurable": {
                     "thread_id": thread_id,
-                    "recursion_limit": 10
+                    
                 }
             }
 
