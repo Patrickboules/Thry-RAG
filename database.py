@@ -8,7 +8,7 @@ from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_postgres.vectorstores import PGVector
 from langgraph.checkpoint.postgres import PostgresSaver
 from psycopg.rows import dict_row
-from psycopg_pool import ConnectionPool
+import psycopg
 
 # Suppress transformers/pytorch warnings before importing
 warnings.filterwarnings("ignore", message=".*PyTorch.*")
@@ -37,26 +37,26 @@ class Database:
 
         self.__connection_kwargs = {
             "autocommit": True,
-            "prepare_threshold": 0,  # Required for PgBouncer transaction mode
+            "prepare_threshold": 0,
             "row_factory": dict_row,
         }
 
         # Initialize connection pool with serverless-optimized settings
-        self.__sync_connection_pool = ConnectionPool(
-            conninfo=self.__dbconnection_string,
-            max_size=1,  # Single connection per serverless function instance
-            min_size=0,  # Don't maintain persistent connections
-            timeout=15,  # Increased timeout for Neon Postgres connection pooler
-            max_lifetime=300,  # Close connections after 5 minutes
-            max_idle=60,  # Close idle connections after 1 minute
-            kwargs=self.__connection_kwargs,
-        )
-
+        self.__connection= None  
         # Lazy initialization placeholders (initialized on first access)
         self.__embeddings: Optional[HuggingFaceEndpointEmbeddings] = None
         self.__vector_db: Optional[PGVector] = None
         self.__checkpointer: Optional[PostgresSaver] = None
 
+    def __get_connection(self):
+        """create a database connection pool"""
+        if not self.__connection or self.__connection.closed:
+            self.__connection = psycopg.connect(
+                conninfo=self.__dbconnection_string,
+                **self.__connection_kwargs
+                )
+        return self.__connection
+    
     # Lazy property for Embeddings - reduces cold start latency
     @property
     def __embeddings_lazy(self) -> HuggingFaceEndpointEmbeddings:
@@ -82,7 +82,7 @@ class Database:
     @property
     def __checkpointer_lazy(self) -> PostgresSaver:
         if self.__checkpointer is None:
-            self.__checkpointer = PostgresSaver(self.__sync_connection_pool)
+            self.__checkpointer = PostgresSaver(self.__get_connection())
         return self.__checkpointer
 
     def get_pgvector(self) -> PGVector:
@@ -96,11 +96,11 @@ class Database:
 
     def close(self):
         """Close the connection pool. Call this before function exit in serverless."""
-        if hasattr(self, '_Database__sync_connection_pool') and self.__sync_connection_pool:
+        if hasattr(self, '__connection') and self.__connection:
             try:
-                self.__sync_connection_pool.close()
+                self.__connection.close()
             except Exception:
-                pass  # Best effort cleanup in serverless
+                pass
 
     # Context manager support for guaranteed cleanup
     def __enter__(self):
