@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class LLM:
-    def __init__(self) -> None: 
+    def __init__(self,vectordb:PGVector) -> None: 
         # Initialize the endpoint
         llm = ChatGroq(
             model="qwen/qwen3-32b",
@@ -16,7 +16,7 @@ class LLM:
             max_retries=2,
         )        
         # Fetch and bind tools
-        self.__tools = self._fetch_tools() 
+        self.__tools = self._fetch_tools(vectordb) 
         self.__llm = llm.bind_tools(self.__tools)
 
     def _fetch_tools(self,vectordb:PGVector) -> list[BaseTool]:

@@ -61,9 +61,9 @@ class ThryAgent:
         # Create LLM instance per agent instance (not global)
         self.__db_manager = get_database()
 
-        self.__llm_class = LLM()
+        self.__llm_class = LLM(self.__db_manager.get_pgvector())
         self.__llm = self.__llm_class.get_llm()
-        self.__tools = self.__llm_class.get_tools(self.__db_manager.get_pgvector())
+        self.__tools = self.__llm_class.get_tools()
 
         self.__graph = StateGraph(AgentState)
 
