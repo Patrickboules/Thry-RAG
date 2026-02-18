@@ -23,8 +23,6 @@ def validateEnv():
 
     logger.info("✅ Environment validated.")
 
-validateEnv()
-
 def get_uuid():
     """
     Generate a unique UUID

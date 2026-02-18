@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from typing import Optional, Generator
 
 from dotenv import load_dotenv
-from langchain_huggingface import HuggingFaceEndpointEmbeddings
+from huggingface_hub import InferenceClient
 from langchain_postgres.vectorstores import PGVector
 from langgraph.checkpoint.postgres import PostgresSaver
 from psycopg.rows import dict_row
@@ -53,15 +53,15 @@ class Database:
         )
 
         # Lazy initialization placeholders (initialized on first access)
-        self.__embeddings: Optional[HuggingFaceEndpointEmbeddings] = None
+        self.__embeddings: Optional[InferenceClient] = None
         self.__vector_db: Optional[PGVector] = None
         self.__checkpointer: Optional[PostgresSaver] = None
 
     # Lazy property for Embeddings - reduces cold start latency
     @property
-    def __embeddings_lazy(self) -> HuggingFaceEndpointEmbeddings:
+    def __embeddings_lazy(self) -> InferenceClient:
         if self.__embeddings is None:
-            self.__embeddings = HuggingFaceEndpointEmbeddings(
+            self.__embeddings = InferenceClient(
                 model="sentence-transformers/all-MiniLM-L6-v2",
                 provider="hf-inference"
             )
@@ -88,7 +88,7 @@ class Database:
     def get_pgvector(self) -> PGVector:
         return self.__vector_db_lazy
 
-    def get_embeddings(self) -> HuggingFaceEndpointEmbeddings:
+    def get_embeddings(self) -> InferenceClient:
         return self.__embeddings_lazy
 
     def get_PostgresSaver(self) -> PostgresSaver:
