@@ -60,7 +60,7 @@ class ThryAgent:
     def __init__(self):
         # Create LLM instance per agent instance (not global)
         self.__db_manager = get_database()
-        self.__connection_pool = self.__db_manager.get_pool()
+        self.__pool = self.__db_manager.get_pool() 
 
         self.__llm_class = LLM(self.__db_manager.get_pgvector())
         self.__llm = self.__llm_class.get_llm()
@@ -79,31 +79,27 @@ class ThryAgent:
         self.__graph.add_edge("tools", "llm")
         self.__graph.set_entry_point("llm")
         
-        self.__connection_pool.open()
 
-        self.checkpointer = self.__db_manager.get_PostgresSaver(self.__connection_pool)
+        self.checkpointer = self.__db_manager.get_PostgresSaver()
         self.rag_agent = self.__graph.compile(checkpointer=self.checkpointer)
 
     def run(self, query: str, thread_id: str) -> str:
         try:
+            self.__pool.open()
             messages = [HumanMessage(content=query)]
 
             config = {
                 "recursion_limit": 10,
                 "configurable": {
-                    "thread_id": thread_id,
-                    
+                    "thread_id": thread_id,     
                 }
             }
 
-            result = self.rag_agent.invoke(
-                {"messages": messages},
-                config=config
-            )
+            result = self.rag_agent.invoke({"messages": messages},config=config)
             
             return result
         except Exception as e:
             raise e
         finally:
-            self.__connection_pool.close()
+            self.__pool.close()
             self.__db_manager.close()

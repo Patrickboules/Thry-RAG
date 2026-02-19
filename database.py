@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from typing import Optional, Generator
 
 from dotenv import load_dotenv
-from huggingface_hub import InferenceClient
+from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_postgres.vectorstores import PGVector
 from langgraph.checkpoint.postgres import PostgresSaver
 from psycopg.rows import dict_row
@@ -54,17 +54,16 @@ class Database:
         )
 
         # Lazy initialization placeholders (initialized on first access)
-        self.__embeddings: Optional[InferenceClient] = None
+        self.__embeddings: Optional[HuggingFaceEndpointEmbeddings] = None
         self.__vector_db: Optional[PGVector] = None
         self.__checkpointer: Optional[PostgresSaver] = None
 
     # Lazy property for Embeddings - reduces cold start latency
     @property
-    def __embeddings_lazy(self) -> InferenceClient:
+    def __embeddings_lazy(self) -> HuggingFaceEndpointEmbeddings:
         if self.__embeddings is None:
-            self.__embeddings = InferenceClient(
+            self.__embeddings = HuggingFaceEndpointEmbeddings(
                 model="sentence-transformers/all-MiniLM-L6-v2",
-                provider="hf-inference"
             )
         return self.__embeddings
 
@@ -83,29 +82,27 @@ class Database:
     @property
     def __checkpointer_lazy(self) -> PostgresSaver:
         if self.__checkpointer is None:
-            self.__checkpointer = PostgresSaver()
+            self.__checkpointer = PostgresSaver(self.__sync_connection_pool)
         return self.__checkpointer
 
     def get_pgvector(self) -> PGVector:
         return self.__vector_db_lazy
 
-    def get_embeddings(self) -> InferenceClient:
+    def get_embeddings(self) -> HuggingFaceEndpointEmbeddings:
         return self.__embeddings_lazy
 
     def get_PostgresSaver(self) -> PostgresSaver:
         return self.__checkpointer_lazy
     
-    def get_pool(self)-> ConnectionPool:
+    def get_pool(self) -> ConnectionPool:
         return self.__sync_connection_pool
 
     def close(self):
-        """Close the connection pool. Call this before function exit in serverless."""
         if hasattr(self, '_Database__sync_connection_pool') and self.__sync_connection_pool:
-            try:
+            try:    
                 self.__sync_connection_pool.close()
-            except Exception:
-                pass  # Best effort cleanup in serverless
-
+            except Exception as e:
+                pass
     # Context manager support for guaranteed cleanup
     def __enter__(self):
         return self
@@ -114,10 +111,6 @@ class Database:
         self.close()
         return False  # Don't suppress exceptions
 
-# In Vercel serverless, create a new instance per request or use context manager
-_database_instance: Optional[Database] = None
-
-
 def get_database() -> Database:
     """
     Get database instance.
@@ -125,29 +118,4 @@ def get_database() -> Database:
     For Vercel serverless: Create a new instance per request to avoid
     connection leaks across function invocations.
     """
-
     return Database()
-
-
-@contextmanager
-def use_db() -> Generator[Database, None, None]:
-    """
-    Context manager for database access with guaranteed cleanup.
-
-    This is the RECOMMENDED way to use the database in Vercel serverless
-    functions to prevent connection leaks.
-
-    """
-    db = get_database()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-def reset_database():
-    """Reset the database singleton. Useful for testing or connection issues."""
-    global _database_instance
-    if _database_instance:
-        _database_instance.close()
-        _database_instance = None

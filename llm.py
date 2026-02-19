@@ -11,7 +11,7 @@ class LLM:
         # Initialize the endpoint
         llm = ChatGroq(
             model="qwen/qwen3-32b",
-            temperature=0.7,
+            temperature=0.0,
             max_tokens=2000,
             max_retries=2,
         )        

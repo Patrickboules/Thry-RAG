@@ -132,7 +132,10 @@ async def send_message(message: QueryID,
         agent = ThryAgent()
 
         # Run the synchronous agent.run() in a thread pool to avoid blocking
-        result = await asyncio.to_thread(agent.run, message.query, thread_id)
+        result = await asyncio.wait_for(
+            asyncio.to_thread(agent.run, message.query, thread_id),
+            timeout=50.0
+        )
 
         if not result or 'messages' not in result or not result["messages"]:
             logger.error("Agent returned invalid result")
@@ -140,6 +143,15 @@ async def send_message(message: QueryID,
 
         return {"response": result['messages'][-1].content}
 
+
+    except asyncio.TimeoutError:
+        # ✅ Catch timeout specifically and return clean 504
+        logger.error("Agent timed out after 50 seconds")
+        raise HTTPException(
+            status_code=504,
+            detail="Request timed out. Please try again."
+        )
+    
     except HTTPException:
         raise
 
