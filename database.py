@@ -50,6 +50,7 @@ class Database:
             max_lifetime=120,  
             max_idle=60,  
             kwargs=self.__connection_kwargs,
+            open=False
         )
 
         # Lazy initialization placeholders (initialized on first access)
@@ -82,7 +83,7 @@ class Database:
     @property
     def __checkpointer_lazy(self) -> PostgresSaver:
         if self.__checkpointer is None:
-            self.__checkpointer = PostgresSaver(self.__sync_connection_pool)
+            self.__checkpointer = PostgresSaver()
         return self.__checkpointer
 
     def get_pgvector(self) -> PGVector:
@@ -93,6 +94,9 @@ class Database:
 
     def get_PostgresSaver(self) -> PostgresSaver:
         return self.__checkpointer_lazy
+    
+    def get_pool(self)-> ConnectionPool:
+        return self.__sync_connection_pool
 
     def close(self):
         """Close the connection pool. Call this before function exit in serverless."""
