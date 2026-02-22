@@ -1,11 +1,14 @@
 from langchain_core.tools import tool
 from typing import Optional
 from functools import partial
-from huggingface_hub import InferenceClient
 from langchain_postgres.vectorstores import PGVector
+import requests
+import json
+import os
 
+url = "https://api.langsearch.com/v1/rerank"
 
-def _retriever_with_reranker(query: str, reranker: InferenceClient,vector_space:PGVector) -> str:
+def _retriever_with_reranker(query: str,vector_space:PGVector) -> str:
     """
     This tool searches and returns the information from the Thndr Learn Content.
     """
@@ -18,15 +21,28 @@ def _retriever_with_reranker(query: str, reranker: InferenceClient,vector_space:
     if not docs:
             return "I found no relevant information in the Thndr Learn Content"
 
-    scores = []
-    for doc in docs:
-            result = reranker.text_classification(f"{query} [SEP] {doc.page_content}")
-            scores.append(result[0]['score'])
+    payload = json.dumps({
+        "model": "langsearch-reranker-v1",
+        "query": query,
+        "top_n": 3,
+        "return_documents": True,
+        "documents": [doc.page_content for doc in docs]
+    })
 
-        # Sort by score and get top 3
-    ranked_docs = sorted(zip(scores, docs), reverse=True)[:3]
+    headers = {
+        'Authorization': f'Bearer {os.getenv("LANGSEARCH_API_KEY")}',
+        'Content-Type': 'application/json'
+    }
 
-    return "\n\n".join([f"Document {i+1}:\n{doc.page_content}" for i, (score, doc) in enumerate(ranked_docs)])
+    response = requests.request("POST", url, headers=headers, data=payload)
+    response.raise_for_status()
+
+    results = response.json()["results"]
+
+    return "\n\n".join([
+    f"Document {i+1}:\n{result['document']['text']}"
+    for i, result in enumerate(results)
+    ])
 
 
 class MyTools:
@@ -38,13 +54,11 @@ class MyTools:
     """
 
     def __init__(self,vector_space:PGVector):
-        # Create reranker instance per tools instance
-        self.__reranker = InferenceClient(model="BAAI/bge-reranker-v2-m3")
         self.__vectordb = vector_space
 
     def get_tools(self):
         # Create tool with reranker bound using functools.partial
-        return [tool(partial(_retriever_with_reranker, reranker=self.__reranker,vector_space = self.__vectordb))]
+        return [tool(partial(_retriever_with_reranker,vector_space = self.__vectordb))]
 
 
 # Helper function to get tools instance
