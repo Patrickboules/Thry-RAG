@@ -86,7 +86,7 @@ async def verify_api_key(api_key: str = Header(None, alias="Thry-Api-Key")):
         raise HTTPException(status_code=403, detail="Forbidden: Invalid API Key")
 
 async def check_rate_limit(request: Request):
-    ip = request.client.host
+    ip = request.headers.get("x-forwarded-for", request.client.host).split(",")[0].strip()
     
     # Check per-IP limit
     per_ip_response = ratelimit.limit(ip)

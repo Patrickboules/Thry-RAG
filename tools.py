@@ -34,7 +34,7 @@ def _retriever_with_reranker(query: str,vector_space:PGVector) -> str:
         'Content-Type': 'application/json'
     }
 
-    response = requests.request("POST", url, headers=headers, data=payload)
+    response = requests.request("POST", url, headers=headers, data=payload, timeout=10)
     response.raise_for_status()
 
     results = response.json()["results"]

@@ -11,7 +11,10 @@ def validateEnv():
         "GROQ_API_KEY",
         "ALLOWED_ORIGINS",
         "THRY_API_KEY",
-        "HUGGINGFACE_TOKEN"
+        "HUGGINGFACEHUB_API_TOKEN",
+        "LANGSEARCH_API_KEY",
+        "UPSTASH_REDIS_REST_TOKEN",
+        "UPSTASH_REDIS_REST_URL"
     ]
     missing = [v for v in env_variables if not os.getenv(v)]
 
