@@ -45,9 +45,12 @@ class QueryID(BaseModel):
     @field_validator('chat_id')
     @classmethod
     def validate_chat_id(cls, v: str) -> str:
-        if not v or not v.strip():
+        v = v.strip()
+        if not v:
             raise ValueError('Chat ID cannot be empty')
-        return v.strip()
+        if not re.match(r'^[a-zA-Z0-9_\-]{1,64}$', v):  # only safe characters
+            raise ValueError('Chat ID contains invalid characters')
+        return v
 
 validateEnv()
 
