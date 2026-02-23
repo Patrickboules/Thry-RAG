@@ -47,9 +47,18 @@ class MyTools:
                 'Content-Type': 'application/json'
             }
 
-            with httpx.Client() as client:
-                response = client.post(RERANK_URL, headers=headers, json=payload)
-                response.raise_for_status()
+            with httpx.Client(timeout=httpx.Timeout(10.0, connect=5.0)) as client:
+                try:
+                    response = client.post(RERANK_URL, headers=headers, json=payload)
+                    response.raise_for_status()
+                except httpx.TimeoutException:
+                # Fall back to raw retrieval results if reranker times out
+                    return "\n\n".join([
+                        f"Document {i+1}:\n{doc.page_content}"
+                        for i, doc in enumerate(docs[:3])
+                        ])
+                except httpx.HTTPStatusError as e:
+                    return f"Reranking service error ({e.response.status_code}). Please try again."
 
             results = response.json()["results"]
 

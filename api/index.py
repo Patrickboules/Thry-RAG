@@ -1,7 +1,9 @@
 import warnings
+
 warnings.filterwarnings("ignore", message=".*Pydantic V1.*")
 warnings.filterwarnings("ignore", message=".*PyTorch.*TensorFlow.*")
 
+import re
 import sys
 import os
 import asyncio
@@ -86,8 +88,10 @@ async def verify_api_key(api_key: str = Header(None, alias="Thry-Api-Key")):
         raise HTTPException(status_code=403, detail="Forbidden: Invalid API Key")
 
 async def check_rate_limit(request: Request):
-    ip = request.headers.get("x-forwarded-for", request.client.host).split(",")[0].strip()
-    
+    ip = (
+        request.headers.get("x-vercel-forwarded-for") or
+        request.headers.get("x-forwarded-for", request.client.host).split(",")[0].strip()
+    )
     # Check per-IP limit
     per_ip_response = ratelimit.limit(ip)
     if not per_ip_response.allowed:
@@ -105,7 +109,15 @@ async def check_rate_limit(request: Request):
             detail="Service is busy. Please try again shortly.",
             headers={"Retry-After": "60"}
         )
-    
+
+UUID_REGEX = re.compile(
+        r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+        re.IGNORECASE
+)
+
+def is_valid_uuid(value: str) -> bool:
+        return bool(UUID_REGEX.match(value))    
+
 @app.post("/chat")
 async def send_message(message: QueryID,
                        response: Response,
@@ -113,9 +125,10 @@ async def send_message(message: QueryID,
                        session_id: str = Cookie(None),
                        authorized: str = Depends(verify_api_key),
                        _: None = Depends(check_rate_limit)):
+    
 
     try:
-        if not session_id:
+        if not session_id and not is_valid_uuid(session_id):
             session_id = str(get_uuid())
             response.set_cookie(
                 key="session_id",

@@ -1,7 +1,8 @@
 from langgraph.graph import StateGraph
+from langgraph.errors import GraphRecursionError
 from operator import add as add_messages
 from typing import TypedDict, Sequence, Annotated
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage, AIMessage
 from langgraph.prebuilt import tools_condition, ToolNode
 from llm import LLM
 from database import get_database
@@ -94,7 +95,7 @@ class ThryAgent:
             messages = [HumanMessage(content=query)]
 
             config = {
-                "recursion_limit": 10,
+                "recursion_limit": 25,
                 "configurable": {
                     "thread_id": thread_id,
                 }
@@ -103,6 +104,12 @@ class ThryAgent:
             result = self.__rag_agent.invoke({"messages": messages}, config=config)
 
             return result
+        except GraphRecursionError:
+            return {
+                "messages": [
+                AIMessage(content="I'm sorry, your question required too many steps to process. Could you try rephrasing or simplifying it?")
+            ]
+            }
         except Exception as e:
             raise e
         finally:
