@@ -1,7 +1,7 @@
+import logging
 import os
 import warnings
-from contextlib import contextmanager
-from typing import Optional, Generator
+from typing import Optional
 
 from dotenv import load_dotenv
 from langchain_huggingface import HuggingFaceEndpointEmbeddings
@@ -9,6 +9,8 @@ from langchain_postgres.vectorstores import PGVector
 from langgraph.checkpoint.postgres import PostgresSaver
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
+from sqlalchemy import create_engine
+from sqlalchemy.pool import NullPool
 
 # Suppress transformers/pytorch warnings before importing
 warnings.filterwarnings("ignore", message=".*PyTorch.*")
@@ -16,6 +18,7 @@ warnings.filterwarnings("ignore", message=".*TensorFlow.*")
 
 load_dotenv()
 
+logger = logging.getLogger(__name__)
 
 class Database:
     """
@@ -40,6 +43,13 @@ class Database:
             "prepare_threshold": 0,  # Required for PgBouncer transaction mode
             "row_factory": dict_row,
         }
+
+        sa_url = (
+            self.__dbconnection_string
+            .replace("postgresql://", "postgresql+psycopg2://")
+            .replace("postgresql+psycopg://", "postgresql+psycopg2://")
+        )
+        self.__sa_engine = create_engine(sa_url, poolclass=NullPool)
 
         # Initialize connection pool with serverless-optimized settings
         self.__sync_connection_pool = ConnectionPool(
@@ -72,7 +82,7 @@ class Database:
     def __vector_db_lazy(self) -> PGVector:
         if self.__vector_db is None:
             self.__vector_db = PGVector(
-                connection=self.__dbconnection_string,
+                connection=self.__sa_engine,
                 embeddings=self.__embeddings_lazy,
                 collection_name='thry_rag'
             )
@@ -98,11 +108,21 @@ class Database:
         return self.__sync_connection_pool
 
     def close(self):
-        if hasattr(self, '_Database__sync_connection_pool') and self.__sync_connection_pool:
-            try:    
-                self.__sync_connection_pool.close()
-            except Exception as e:
-                pass
+        # Close psycopg pool
+        try:
+            if hasattr(self, '_Database__sync_connection_pool') and self.__sync_connection_pool:
+                if not self.__sync_connection_pool.closed:
+                    self.__sync_connection_pool.close()
+        except Exception:
+            logger.warning("Error closing psycopg pool", exc_info=True)
+
+        # Dispose SQLAlchemy engine
+        try:
+            if hasattr(self, '_Database__sa_engine') and self.__sa_engine:
+                self.__sa_engine.dispose()
+        except Exception:
+            logger.warning("Error disposing SQLAlchemy engine", exc_info=True)
+
     # Context manager support for guaranteed cleanup
     def __enter__(self):
         return self

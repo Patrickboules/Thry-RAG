@@ -1,6 +1,6 @@
 import os
 import logging
-import uuid
+from uuid_utils import uuid7
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -30,4 +30,4 @@ def get_uuid():
     """
     Generate a unique UUID
     """
-    return uuid.uuid7()
+    return uuid7()
