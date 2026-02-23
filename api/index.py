@@ -128,7 +128,7 @@ async def send_message(message: QueryID,
     
 
     try:
-        if not session_id and not is_valid_uuid(session_id):
+        if not session_id or not is_valid_uuid(session_id):
             session_id = str(get_uuid())
             response.set_cookie(
                 key="session_id",
