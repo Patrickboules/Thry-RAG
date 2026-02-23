@@ -1,9 +1,7 @@
 from langchain_core.tools import tool
-from typing import Optional
 from functools import partial
 from langchain_postgres.vectorstores import PGVector
-import requests
-import json
+import httpx
 import os
 
 url = "https://api.langsearch.com/v1/rerank"
@@ -21,21 +19,22 @@ def _retriever_with_reranker(query: str,vector_space:PGVector) -> str:
     if not docs:
             return "I found no relevant information in the Thndr Learn Content"
 
-    payload = json.dumps({
+    payload = {
         "model": "langsearch-reranker-v1",
         "query": query,
         "top_n": 3,
         "return_documents": True,
         "documents": [doc.page_content for doc in docs]
-    })
+    }
 
     headers = {
         'Authorization': f'Bearer {os.getenv("LANGSEARCH_API_KEY")}',
         'Content-Type': 'application/json'
     }
 
-    response = requests.request("POST", url, headers=headers, data=payload, timeout=10)
-    response.raise_for_status()
+    with httpx.Client() as client:
+        response = client.post(url, headers=headers, json=payload)
+        response.raise_for_status()    
 
     results = response.json()["results"]
 
