@@ -1,5 +1,10 @@
 {
-  "version": 2,
+  "functions": {
+    "api/index.py": {
+      "runtime": "@vercel/python@1.0.0",
+      "maxDuration": 60
+    }
+  },
   "routes": [
     {
       "src": "/(.*)",
@@ -8,10 +13,5 @@
   ],
   "env": {
     "PYTHONUNBUFFERED": "1"
-  },
-  "functions":{
-    "api/index.py":{
-      "maxDuration":60
-    }
   }
 }
