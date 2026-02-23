@@ -1,7 +1,7 @@
 import os
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
-from database import use_db
+from database import get_database
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -20,7 +20,7 @@ def process_pdf(pdf_path: str) -> None:
         pdf_path: Path to the PDF file to process
     """
     # Use context manager to ensure database cleanup
-    with use_db() as db:
+    with get_database() as db:
         vector_space = db.get_pgvector()
 
         pdf_loader = PyPDFLoader(pdf_path)
