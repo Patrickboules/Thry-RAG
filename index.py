@@ -60,8 +60,11 @@ redis = Redis.from_env()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info("Application starting up...")
     yield
+    logger.info("Shutting down, closing database connections...")
     agent._ThryAgent__db_manager.close()
+    logger.info("Database connections closed.")
 
 app = FastAPI(lifespan=lifespan)
 agent = ThryAgent()
@@ -188,5 +191,6 @@ async def send_message(message: QueryID,
 
 @app.get("/health")
 async def health_check():
-    return {"status": "ok"}
+    """Health check endpoint for Render and monitoring.""" 
+    return {"status": "ok", "service": "thry-backend"}
 

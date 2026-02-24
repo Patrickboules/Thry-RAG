@@ -6,7 +6,7 @@ from typing import Optional
 from dotenv import load_dotenv
 from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_postgres.vectorstores import PGVector
-from langgraph.checkpoint.postgres import PostgresSaver
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 from sqlalchemy import create_engine
@@ -44,7 +44,7 @@ class Database:
         self.__sync_connection_pool = ConnectionPool(
             conninfo=self.__dbconnection_string,
             max_size=10,
-            min_size=2,
+            min_size=0,
             reconnect_timeout=30,       
             reconnect_failed=None,
             timeout=10,
@@ -59,7 +59,7 @@ class Database:
                 embeddings=self.__embeddings,
                 collection_name='thry_rag'
             )
-        self.__checkpointer: Optional[PostgresSaver] = PostgresSaver(self.__sync_connection_pool)
+        self.__checkpointer: Optional[AsyncPostgresSaver] = AsyncPostgresSaver(self.__sync_connection_pool)
 
 
     def get_pgvector(self) -> PGVector:
@@ -68,7 +68,7 @@ class Database:
     def get_embeddings(self) -> HuggingFaceEndpointEmbeddings:
         return self.__embeddings
 
-    def get_PostgresSaver(self) -> PostgresSaver:
+    def get_PostgresSaver(self) -> AsyncPostgresSaver:
         return self.__checkpointer
     
     def get_pool(self) -> ConnectionPool:

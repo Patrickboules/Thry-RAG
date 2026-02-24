@@ -21,7 +21,7 @@ class MyTools:
         """Create tool with vector_space bound via closure (not partial)."""
 
         @tool
-        def retriever_with_reranker(query: str) -> str:
+        async def retriever_with_reranker(query: str) -> str:
             """
             This tool searches and returns the information from the Thndr Learn Content.
             """
@@ -29,7 +29,7 @@ class MyTools:
                 search_type="similarity",
                 search_kwargs={"k": 10}
             )
-            docs = retriever.invoke(query)
+            docs = await retriever.ainvoke(query)
 
             if not docs:
                 return "I found no relevant information in the Thndr Learn Content"
@@ -47,20 +47,27 @@ class MyTools:
                 'Content-Type': 'application/json'
             }
 
-            with httpx.Client(timeout=httpx.Timeout(10.0, connect=5.0)) as client:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=5.0)) as client:
                 try:
-                    response = client.post(RERANK_URL, headers=headers, json=payload)
+                    response = await client.post(RERANK_URL, headers=headers, json=payload)
                     response.raise_for_status()
                 except httpx.TimeoutException:
-                # Fall back to raw retrieval results if reranker times out
+
                     return "\n\n".join([
                         f"Document {i+1}:\n{doc.page_content}"
                         for i, doc in enumerate(docs[:3])
-                        ])
+                    ])
                 except httpx.HTTPStatusError as e:
                     return f"Reranking service error ({e.response.status_code}). Please try again."
 
-            results = response.json()["results"]
+            try:
+                results = response.json()["results"]
+            except (KeyError, ValueError) as e:
+                # Fallback if response parsing fails
+                return "\n\n".join([
+                    f"Document {i+1}:\n{doc.page_content}"
+                    for i, doc in enumerate(docs[:3])
+                ])
 
             return "\n\n".join([
                 f"Document {i+1}:\n{result['document']['text']}"
