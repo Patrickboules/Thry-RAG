@@ -15,6 +15,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from upstash_redis import Redis
 from upstash_ratelimit import Ratelimit, FixedWindow
+from contextlib import asynccontextmanager
+
 
 from AiAgent import ThryAgent
 from config import validateEnv, get_uuid
@@ -55,7 +57,13 @@ class QueryID(BaseModel):
 validateEnv()
 
 redis = Redis.from_env()
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    agent._ThryAgent__db_manager.close()
+
+app = FastAPI(lifespan=lifespan)
 agent = ThryAgent()
 
 

@@ -49,15 +49,6 @@ def call_llm(state: AgentState, llm) -> AgentState:
 
 
 class ThryAgent:
-    """
-    Serverless-compatible RAG agent.
-
-    Each instance is created fresh per request in Vercel serverless to avoid:
-    - Shared state across invocations
-    - Database pool lifecycle issues
-    - Race conditions with concurrent requests (Fluid Compute)
-    """
-
     def __init__(self):
         # Create LLM instance per agent instance (not global)
         self.__db_manager = get_database()

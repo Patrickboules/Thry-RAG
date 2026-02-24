@@ -21,10 +21,6 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 class Database:
-    """
-
-    """
-
     def __init__(self):
         # Initialize database connection string
         self.__dbconnection_string = os.getenv("DATABASE_URL")
@@ -48,7 +44,10 @@ class Database:
         self.__sync_connection_pool = ConnectionPool(
             conninfo=self.__dbconnection_string,
             max_size=10,
-            min_size=2,  
+            min_size=2,
+            reconnect_timeout=30,       
+            reconnect_failed=None,
+            timeout=10,
             kwargs=self.__connection_kwargs,
         )
 
