@@ -57,7 +57,7 @@ class Database:
             )
         self.__vector_db: Optional[PGVector] = PGVector(
                 connection=self.__sa_engine,
-                embeddings=self.__embeddings_lazy,
+                embeddings=self.__embeddings,
                 collection_name='thry_rag'
             )
         self.__checkpointer: Optional[PostgresSaver] = PostgresSaver(self.__sync_connection_pool)
