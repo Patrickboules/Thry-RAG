@@ -22,14 +22,7 @@ logger = logging.getLogger(__name__)
 
 class Database:
     """
-    Serverless-compatible database manager for Neon Postgres.
 
-    Designed for Vercel serverless functions with:
-    - Short-lived connection pools (created per request in serverless)
-    - Automatic cleanup via context manager (no atexit - doesn't work in serverless)
-    - Lazy initialization to reduce cold start latency
-    - Singleton pattern disabled for serverless cold starts
-    - Neon pooled connection string support (use the -pooler endpoint)
     """
 
     def __init__(self):
@@ -40,7 +33,7 @@ class Database:
 
         self.__connection_kwargs = {
             "autocommit": True,
-            "prepare_threshold": 0,  # Required for PgBouncer transaction mode
+            "prepare_threshold": 0,  
             "row_factory": dict_row,
         }
 
@@ -54,55 +47,30 @@ class Database:
         # Initialize connection pool with serverless-optimized settings
         self.__sync_connection_pool = ConnectionPool(
             conninfo=self.__dbconnection_string,
-            max_size=1,
-            min_size=0,  
-            timeout=15,  
-            max_lifetime=120,  
-            max_idle=60,  
+            max_size=10,
+            min_size=2,  
             kwargs=self.__connection_kwargs,
-            open=False
         )
 
-        # Lazy initialization placeholders (initialized on first access)
-        self.__embeddings: Optional[HuggingFaceEndpointEmbeddings] = None
-        self.__vector_db: Optional[PGVector] = None
-        self.__checkpointer: Optional[PostgresSaver] = None
-
-    # Lazy property for Embeddings - reduces cold start latency
-    @property
-    def __embeddings_lazy(self) -> HuggingFaceEndpointEmbeddings:
-        if self.__embeddings is None:
-            self.__embeddings = HuggingFaceEndpointEmbeddings(
+        self.__embeddings: Optional[HuggingFaceEndpointEmbeddings] = HuggingFaceEndpointEmbeddings(
                 model="sentence-transformers/all-MiniLM-L6-v2",
             )
-        return self.__embeddings
-
-    # Lazy property for PGVector - reduces cold start latency
-    @property
-    def __vector_db_lazy(self) -> PGVector:
-        if self.__vector_db is None:
-            self.__vector_db = PGVector(
+        self.__vector_db: Optional[PGVector] = PGVector(
                 connection=self.__sa_engine,
                 embeddings=self.__embeddings_lazy,
                 collection_name='thry_rag'
             )
-        return self.__vector_db
+        self.__checkpointer: Optional[PostgresSaver] = PostgresSaver(self.__sync_connection_pool)
 
-    # Lazy property for PostgresSaver - reduces cold start latency
-    @property
-    def __checkpointer_lazy(self) -> PostgresSaver:
-        if self.__checkpointer is None:
-            self.__checkpointer = PostgresSaver(self.__sync_connection_pool)
-        return self.__checkpointer
 
     def get_pgvector(self) -> PGVector:
-        return self.__vector_db_lazy
+        return self.__vector_db
 
     def get_embeddings(self) -> HuggingFaceEndpointEmbeddings:
-        return self.__embeddings_lazy
+        return self.__embeddings
 
     def get_PostgresSaver(self) -> PostgresSaver:
-        return self.__checkpointer_lazy
+        return self.__checkpointer
     
     def get_pool(self) -> ConnectionPool:
         return self.__sync_connection_pool

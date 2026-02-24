@@ -61,7 +61,6 @@ class ThryAgent:
     def __init__(self):
         # Create LLM instance per agent instance (not global)
         self.__db_manager = get_database()
-        self.__pool = self.__db_manager.get_pool()
 
         # Initialize components that don't need the pool to be open
         self.__llm_class = LLM(self.__db_manager.get_pgvector())
@@ -81,16 +80,12 @@ class ThryAgent:
         self.__graph.add_edge("tools", "llm")
         self.__graph.set_entry_point("llm")
 
-        # Store checkpointer reference - will be initialized when pool opens
-        self.__checkpointer = None
-        self.__rag_agent = None
+        self.__checkpointer = self.__db_manager.get_PostgresSaver()
+        self.__rag_agent = self.__graph.compile(checkpointer=self.__checkpointer)
+
 
     def run(self, query: str, thread_id: str) -> str:
         try:
-            self.__pool.open()
-
-            self.__checkpointer = self.__db_manager.get_PostgresSaver()
-            self.__rag_agent = self.__graph.compile(checkpointer=self.__checkpointer)
 
             messages = [HumanMessage(content=query)]
 
@@ -112,6 +107,3 @@ class ThryAgent:
             }
         except Exception as e:
             raise e
-        finally:
-            self.__pool.close()
-            self.__db_manager.close()

@@ -6,7 +6,6 @@ warnings.filterwarnings("ignore", message=".*PyTorch.*TensorFlow.*")
 import re
 import sys
 import os
-import asyncio
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -56,6 +55,8 @@ validateEnv()
 
 redis = Redis.from_env()
 app = FastAPI()
+agent = ThryAgent()
+
 
 ratelimit = Ratelimit(
     redis=redis,
@@ -144,29 +145,13 @@ async def send_message(message: QueryID,
 
         thread_id = f"{session_id}:{message.chat_id}"
 
-        # Create a new agent instance per request for Vercel serverless compatibility
-        agent = ThryAgent()
-
-        # Run the synchronous agent.run() in a thread pool to avoid blocking
-        result = await asyncio.wait_for(
-            asyncio.to_thread(agent.run, message.query, thread_id),
-            timeout=50.0
-        )
+        result = agent.run(message.query, thread_id)
 
         if not result or 'messages' not in result or not result["messages"]:
             logger.error("Agent returned invalid result")
             raise HTTPException(status_code=500, detail="Failed to generate response")
 
         return {"response": result['messages'][-1].content}
-
-
-    except asyncio.TimeoutError:
-        # ✅ Catch timeout specifically and return clean 504
-        logger.error("Agent timed out after 50 seconds")
-        raise HTTPException(
-            status_code=504,
-            detail="Request timed out. Please try again."
-        )
     
     except HTTPException:
         raise
@@ -182,5 +167,3 @@ async def send_message(message: QueryID,
 async def health_check():
     return {"status": "ok"}
 
-# Vercel serverless handler
-handler = app
