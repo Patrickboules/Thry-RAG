@@ -9,7 +9,6 @@ from database import get_database
 from functools import partial
 
 
-
 system_prompt = """
 You are Thry, an intelligent AI assistant specialized in investment education, trained on the Thndr Learn educational materials.
 
@@ -42,7 +41,7 @@ class AgentState(TypedDict):
 
 
 def call_llm(state: AgentState, llm) -> AgentState:
-    """Function to call the LLM with the current state."""
+    """Call the LLM with the current state."""
     messages = [SystemMessage(content=system_prompt)] + list(state['messages'])
     message = llm.invoke(messages)
     return {'messages': [message]}
@@ -50,51 +49,56 @@ def call_llm(state: AgentState, llm) -> AgentState:
 
 class ThryAgent:
     def __init__(self):
-        # Create LLM instance per agent instance (not global)
         self.__db_manager = get_database()
 
-        # Initialize components that don't need the pool to be open
         self.__llm_class = LLM(self.__db_manager.get_pgvector())
         self.__llm = self.__llm_class.get_llm()
         self.__tools = self.__llm_class.get_tools()
 
-        self.__graph = StateGraph(AgentState)
+        graph = StateGraph(AgentState)
 
-        # Bind llm instance to the node
-        self.__graph.add_node("llm", partial(call_llm, llm=self.__llm))
-        self.__graph.add_node("tools", ToolNode(self.__tools))
+        graph.add_node("llm", partial(call_llm, llm=self.__llm))
+        graph.add_node("tools", ToolNode(self.__tools))
 
-        self.__graph.add_conditional_edges(
-            "llm",
-            tools_condition
-        )
-        self.__graph.add_edge("tools", "llm")
-        self.__graph.set_entry_point("llm")
+        graph.add_conditional_edges("llm", tools_condition)
+        graph.add_edge("tools", "llm")
+        graph.set_entry_point("llm")
 
-        self.__checkpointer = self.__db_manager.get_PostgresSaver()
-        self.__rag_agent = self.__graph.compile(checkpointer=self.__checkpointer)
+        # Compile with the SYNC PostgresSaver checkpointer.
+        # This graph is invoked via .invoke() (sync) inside asyncio.to_thread(),
+        # which gives it its own thread with no running event loop — correct.
+        self.__rag_agent = graph.compile(checkpointer=self.__db_manager.get_PostgresSaver())
 
+    def run(self, query: str, thread_id: str) -> dict:
+        """
+        Run the agent synchronously.
 
-    def run(self, query: str, thread_id: str) -> str:
+        This method is always called via asyncio.to_thread() from the FastAPI
+        endpoint, so it safely blocks its own thread without touching the
+        main event loop.
+        """
         try:
-
-            messages = [HumanMessage(content=query)]
-
             config = {
                 "recursion_limit": 25,
                 "configurable": {
                     "thread_id": thread_id,
                 }
             }
-
-            result = self.__rag_agent.invoke({"messages": messages}, config=config)
-
+            result = self.__rag_agent.invoke(
+                {"messages": [HumanMessage(content=query)]},
+                config=config
+            )
             return result
+
         except GraphRecursionError:
             return {
                 "messages": [
-                AIMessage(content="I'm sorry, your question required too many steps to process. Could you try rephrasing or simplifying it?")
-            ]
+                    AIMessage(content="I'm sorry, your question required too many steps to process. Could you try rephrasing or simplifying it?")
+                ]
             }
-        except Exception as e:
-            raise e
+        except Exception:
+            raise
+
+    def close(self):
+        """Clean up database connections."""
+        self.__db_manager.close()
