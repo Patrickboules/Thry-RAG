@@ -91,8 +91,8 @@ class Database:
         except Exception:
             logger.warning("Error disposing SQLAlchemy engine", exc_info=True)
 
-    def __enter__(self):
-        return self
+    async def __enter__(self):
+        return await self
 
     async def __exit__(self, exc_type, exc_val, exc_tb):
         await self.close()

@@ -51,7 +51,7 @@ class ThryAgent:
     def __init__(self):
         self.__db_manager = get_database()
 
-        self.__llm_class = LLM(Optional[self.__db_manager.get_pgvector()])
+        self.__llm_class = LLM(self.__db_manager.get_pgvector())
         self.__llm = self.__llm_class.get_llm()
         self.__tools = self.__llm_class.get_tools()
 
@@ -70,11 +70,8 @@ class ThryAgent:
 
     async def run(self, query: str, thread_id: str) -> dict:
         """
-        Run the agent synchronously.
+        Run the agent asynchronously.
 
-        This method is always called via asyncio.to_thread() from the FastAPI
-        endpoint, so it safely blocks its own thread without touching the
-        main event loop.
         """
         try:
             config = {
@@ -98,6 +95,6 @@ class ThryAgent:
         except Exception:
             raise
 
-    def close(self):
+    async def close(self):
         """Clean up database connections."""
-        self.__db_manager.close()
+        await self.__db_manager.close()
