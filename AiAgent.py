@@ -68,6 +68,9 @@ class ThryAgent:
         # which gives it its own thread with no running event loop — correct.
         self.__rag_agent = graph.compile(checkpointer=self.__db_manager.get_PostgresSaver())
 
+    async def initialize(self):
+        await self.__db_manager.get_pool().open()
+
     async def run(self, query: str, thread_id: str) -> dict:
         """
         Run the agent asynchronously.

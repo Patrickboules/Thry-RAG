@@ -30,8 +30,6 @@ class MyTools:
                 search_kwargs={"k": 10}
             )
 
-            # Use sync invoke — we are inside a thread (asyncio.to_thread),
-            # so there is no running event loop here. Sync is correct.
             docs = await retriever.ainvoke(query)
 
             if not docs:

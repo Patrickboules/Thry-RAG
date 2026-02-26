@@ -48,7 +48,7 @@ class Database:
             reconnect_failed=None,
             timeout=10,
             kwargs=self.__connection_kwargs,
-            open=True,             
+            open=False,             
         )
 
         self.__embeddings: Optional[HuggingFaceEndpointEmbeddings] = HuggingFaceEndpointEmbeddings(
