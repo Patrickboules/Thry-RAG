@@ -4,6 +4,7 @@ from langchain_community.document_loaders import PyPDFLoader
 from database import get_database
 from dotenv import load_dotenv
 
+
 load_dotenv()
 
 # Initialize Semantic Chunking
@@ -12,7 +13,7 @@ text_splitter = RecursiveCharacterTextSplitter(
     chunk_overlap=100
 )
 
-def process_pdf(pdf_path: str) -> None:
+async def process_pdf(pdf_path: str) -> None:
     """
     Process a PDF file and add its embeddings to the vector database.
 
@@ -20,7 +21,7 @@ def process_pdf(pdf_path: str) -> None:
         pdf_path: Path to the PDF file to process
     """
     # Use context manager to ensure database cleanup
-    with get_database() as db:
+    async with get_database() as db:
         vector_space = db.get_pgvector()
 
         pdf_loader = PyPDFLoader(pdf_path)
