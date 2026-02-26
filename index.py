@@ -159,7 +159,7 @@ async def send_message(message: QueryID,
 
 
         result = await asyncio.wait_for(
-            asyncio.to_thread(agent.run, message.query, thread_id),25
+            agent.run(message.query, thread_id),25
         )
 
         if not result or 'messages' not in result or not result["messages"]:

@@ -21,7 +21,7 @@ class MyTools:
         """Create tool with vector_space bound via closure."""
 
         @tool
-        def retriever_with_reranker(query: str) -> str:
+        async def retriever_with_reranker(query: str) -> str:
             """
             This tool searches and returns the information from the Thndr Learn Content.
             """
@@ -32,7 +32,7 @@ class MyTools:
 
             # Use sync invoke — we are inside a thread (asyncio.to_thread),
             # so there is no running event loop here. Sync is correct.
-            docs = retriever.invoke(query)
+            docs = await retriever.ainvoke(query)
 
             if not docs:
                 return "I found no relevant information in the Thndr Learn Content"
@@ -50,9 +50,9 @@ class MyTools:
                 'Content-Type': 'application/json'
             }
 
-            with httpx.Client(timeout=httpx.Timeout(10.0, connect=5.0)) as client:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=5.0)) as client:
                 try:
-                    response = client.post(RERANK_URL, headers=headers, json=payload)
+                    response = await client.post(RERANK_URL, headers=headers, json=payload)
                     response.raise_for_status()
                 except httpx.TimeoutException:
                     # Fallback: return top-3 docs without reranking

@@ -6,9 +6,9 @@ from typing import Optional
 from dotenv import load_dotenv
 from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_postgres.vectorstores import PGVector
-from langgraph.checkpoint.postgres import PostgresSaver  # sync saver
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver  
 from psycopg.rows import dict_row
-from psycopg_pool import ConnectionPool
+from psycopg_pool import AsyncConnectionPool
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 
@@ -40,7 +40,7 @@ class Database:
         self.__sa_engine = create_engine(sa_url, poolclass=NullPool)
 
         # Open the pool explicitly so it's ready before first request.
-        self.__sync_connection_pool = ConnectionPool(
+        self.__sync_connection_pool = AsyncConnectionPool(
             conninfo=self.__dbconnection_string,
             max_size=10,
             min_size=1,            # keep at least 1 connection warm on Render
@@ -48,7 +48,7 @@ class Database:
             reconnect_failed=None,
             timeout=10,
             kwargs=self.__connection_kwargs,
-            open=True,             # open immediately, fail fast at startup
+            open=False,             
         )
 
         self.__embeddings: Optional[HuggingFaceEndpointEmbeddings] = HuggingFaceEndpointEmbeddings(
@@ -62,10 +62,8 @@ class Database:
 
         # Use the SYNC PostgresSaver — our agent runs in asyncio.to_thread
         # (a plain thread with no event loop), so async savers won't work.
-        self.__checkpointer: Optional[PostgresSaver] = PostgresSaver(self.__sync_connection_pool)
+        self.__checkpointer: Optional[AsyncPostgresSaver] = AsyncPostgresSaver(self.__sync_connection_pool)
 
-        # Create checkpoint tables if they don't exist yet.
-        self.__checkpointer.setup()
 
     def get_pgvector(self) -> Optional[PGVector]:
         return self.__vector_db
@@ -73,17 +71,17 @@ class Database:
     def get_embeddings(self) -> Optional[HuggingFaceEndpointEmbeddings]:
         return self.__embeddings
 
-    def get_PostgresSaver(self) -> Optional[PostgresSaver]:
+    def get_PostgresSaver(self) -> Optional[AsyncPostgresSaver]:
         return self.__checkpointer
 
-    def get_pool(self) -> Optional[ConnectionPool]:
+    def get_pool(self) -> Optional[AsyncConnectionPool]:
         return self.__sync_connection_pool
 
-    def close(self):
+    async def close(self):
         try:
             if hasattr(self, '_Database__sync_connection_pool') and self.__sync_connection_pool:
                 if not self.__sync_connection_pool.closed:
-                    self.__sync_connection_pool.close()
+                    await self.__sync_connection_pool.close()
         except Exception:
             logger.warning("Error closing psycopg pool", exc_info=True)
 
@@ -96,8 +94,8 @@ class Database:
     def __enter__(self):
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
+    async def __exit__(self, exc_type, exc_val, exc_tb):
+        await self.close()
         return False
 
 

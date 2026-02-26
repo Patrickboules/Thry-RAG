@@ -1,7 +1,7 @@
 from langgraph.graph import StateGraph
 from langgraph.errors import GraphRecursionError
 from operator import add as add_messages
-from typing import TypedDict, Sequence, Annotated
+from typing import TypedDict, Sequence, Annotated,Optional
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage, AIMessage
 from langgraph.prebuilt import tools_condition, ToolNode
 from llm import LLM
@@ -51,7 +51,7 @@ class ThryAgent:
     def __init__(self):
         self.__db_manager = get_database()
 
-        self.__llm_class = LLM(self.__db_manager.get_pgvector())
+        self.__llm_class = LLM(Optional[self.__db_manager.get_pgvector()])
         self.__llm = self.__llm_class.get_llm()
         self.__tools = self.__llm_class.get_tools()
 
@@ -64,12 +64,11 @@ class ThryAgent:
         graph.add_edge("tools", "llm")
         graph.set_entry_point("llm")
 
-        # Compile with the SYNC PostgresSaver checkpointer.
         # This graph is invoked via .invoke() (sync) inside asyncio.to_thread(),
         # which gives it its own thread with no running event loop — correct.
         self.__rag_agent = graph.compile(checkpointer=self.__db_manager.get_PostgresSaver())
 
-    def run(self, query: str, thread_id: str) -> dict:
+    async def run(self, query: str, thread_id: str) -> dict:
         """
         Run the agent synchronously.
 
@@ -84,7 +83,7 @@ class ThryAgent:
                     "thread_id": thread_id,
                 }
             }
-            result = self.__rag_agent.invoke(
+            result = await self.__rag_agent.ainvoke(
                 {"messages": [HumanMessage(content=query)]},
                 config=config
             )
