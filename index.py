@@ -152,16 +152,14 @@ async def send_message(message: QueryID,
                 max_age=30 * 24 * 60 * 60,
                 httponly=True,
                 secure=True,
-                samesite="lax"
+                samesite="none"
             )
 
         thread_id = f"{session_id}:{message.chat_id}"
 
 
-        # Run the synchronous agent.run() in a thread pool to avoid blocking
         result = await asyncio.wait_for(
-            asyncio.to_thread(agent.run, message.query, thread_id),
-            timeout=50.0
+            asyncio.to_thread(agent.run, message.query, thread_id),25
         )
 
         if not result or 'messages' not in result or not result["messages"]:
