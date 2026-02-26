@@ -48,7 +48,7 @@ class Database:
             reconnect_failed=None,
             timeout=10,
             kwargs=self.__connection_kwargs,
-            open=False,             
+            open=True,             
         )
 
         self.__embeddings: Optional[HuggingFaceEndpointEmbeddings] = HuggingFaceEndpointEmbeddings(
@@ -92,7 +92,7 @@ class Database:
             logger.warning("Error disposing SQLAlchemy engine", exc_info=True)
 
     async def __enter__(self):
-        return await self
+        return self
 
     async def __exit__(self, exc_type, exc_val, exc_tb):
         await self.close()

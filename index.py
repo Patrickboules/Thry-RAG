@@ -63,7 +63,6 @@ async def lifespan(app: FastAPI):
     logger.info("Application starting up...")
     # Initialize here — pool is open, event loop is running
     app.state.agent = ThryAgent()
-    await app.state.agent._ThryAgent__db_manager.get_pool().open()
     
     logger.info("Agent initialized successfully.")
     yield
@@ -164,7 +163,7 @@ async def send_message(message: QueryID,
         thread_id = f"{session_id}:{message.chat_id}"
 
         agent = request.app.state.agent
-        
+
         result = await asyncio.wait_for(
             agent.run(message.query, thread_id),50
         )

@@ -1,7 +1,7 @@
 from langgraph.graph import StateGraph
 from langgraph.errors import GraphRecursionError
 from operator import add as add_messages
-from typing import TypedDict, Sequence, Annotated,Optional
+from typing import TypedDict, Sequence, Annotated
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage, AIMessage
 from langgraph.prebuilt import tools_condition, ToolNode
 from llm import LLM
