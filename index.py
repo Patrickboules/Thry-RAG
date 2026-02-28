@@ -188,12 +188,6 @@ async def send_message(message: QueryID,
             detail="An internal error occurred. Please try again later."
         )
 
-
-@app.post("/chat/debug")
-async def debug_body(request: Request):
-    body = await request.json()
-    return body
-
 @app.get("/health")
 async def health_check():
     """Health check endpoint for Render and monitoring.""" 

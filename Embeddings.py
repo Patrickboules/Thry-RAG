@@ -3,6 +3,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
 from database import get_database
 from dotenv import load_dotenv
+import asyncio
 
 
 load_dotenv()
@@ -50,7 +51,7 @@ def main():
     if not os.path.exists(pdf_path):
         raise FileNotFoundError(f"PDF file not found: {pdf_path}")
 
-    process_pdf(pdf_path)
+    asyncio.run(process_pdf(pdf_path))
 
 
 if __name__ == "__main__":
