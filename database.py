@@ -9,7 +9,7 @@ from langchain_postgres.vectorstores import PGVector
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver  
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
-from sqlalchemy import create_engine
+from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
 warnings.filterwarnings("ignore", message=".*PyTorch.*")
@@ -33,11 +33,11 @@ class Database:
         }
 
         sa_url = (
-            self.__dbconnection_string
-            .replace("postgresql://", "postgresql+psycopg2://")
-            .replace("postgresql+psycopg://", "postgresql+psycopg2://")
-        )
-        self.__sa_engine = create_engine(sa_url, poolclass=NullPool)
+    self.__dbconnection_string
+    .replace("postgresql://", "postgresql+psycopg://")
+    .replace("postgresql+psycopg2://", "postgresql+psycopg://")
+)
+        self.__sa_engine = create_async_engine(sa_url, poolclass=NullPool)
 
         # Open the pool explicitly so it's ready before first request.
         self.__sync_connection_pool = AsyncConnectionPool(
@@ -60,8 +60,6 @@ class Database:
             collection_name='thry_rag'
         )
 
-        # Use the SYNC PostgresSaver — our agent runs in asyncio.to_thread
-        # (a plain thread with no event loop), so async savers won't work.
         self.__checkpointer: Optional[AsyncPostgresSaver] = AsyncPostgresSaver(self.__sync_connection_pool)
 
 
@@ -87,7 +85,7 @@ class Database:
 
         try:
             if hasattr(self, '_Database__sa_engine') and self.__sa_engine:
-                self.__sa_engine.dispose()
+                await self.__sa_engine.dispose()  # await instead of sync .dispose()
         except Exception:
             logger.warning("Error disposing SQLAlchemy engine", exc_info=True)
 

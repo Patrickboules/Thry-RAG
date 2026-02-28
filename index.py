@@ -104,11 +104,6 @@ async def global_exception_handler(request, exc):
         content={"detail": "Internal server error"}
     )
 
-async def verify_api_key(api_key: str = Header(None, alias="Thry-Api-Key")):
-    expected = os.getenv("THRY_API_KEY", "")
-    if not api_key or not hmac.compare_digest(api_key, expected):
-        raise HTTPException(status_code=403, detail="Forbidden: Invalid API Key")
-
 async def check_rate_limit(request: Request):
     ip = (
         request.headers.get("x-vercel-forwarded-for") or
@@ -145,7 +140,6 @@ async def send_message(message: QueryID,
                        response: Response,
                        request: Request,
                        session_id: str = Cookie(None),
-                       authorized: str = Depends(verify_api_key),
                        _: None = Depends(check_rate_limit)):
     
 
@@ -193,6 +187,12 @@ async def send_message(message: QueryID,
             status_code=500,
             detail="An internal error occurred. Please try again later."
         )
+
+
+@app.post("/chat/debug")
+async def debug_body(request: Request):
+    body = await request.json()
+    return body
 
 @app.get("/health")
 async def health_check():

@@ -7,12 +7,6 @@ RERANK_URL = "https://api.langsearch.com/v1/rerank"
 
 
 class MyTools:
-    """
-    Serverless-compatible tool manager.
-
-    Each instance creates its own tools with bound vector database
-    to avoid shared state across function invocations.
-    """
 
     def __init__(self, vector_space: PGVector):
         self._vector_space = vector_space
