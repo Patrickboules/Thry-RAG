@@ -39,7 +39,6 @@ MAX_CONCURRENT_AGENT_CALLS = 8
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Application starting up...")
-    # Initialize here — pool is open, event loop is running
     app.state.agent = ThryAgent()
 
     app.state.agent_semaphore = asyncio.Semaphore(MAX_CONCURRENT_AGENT_CALLS)
@@ -48,7 +47,7 @@ async def lifespan(app: FastAPI):
     yield
     
     logger.info("Shutting down...")
-    await app.state.agent.close()  # properly awaited
+    await app.state.agent.close()  
     logger.info("Database connections closed.")
 
 
@@ -121,6 +120,17 @@ async def send_message(message: QueryID,
                        session_id: str = Cookie(None),
                        _: None = Depends(check_rate_limit)):
     
+    if not session_id or not is_valid_uuid(session_id):
+                session_id = str(get_uuid())
+                response.set_cookie(
+                    key="session_id",
+                    value=session_id,
+                    max_age=30 * 24 * 60 * 60,
+                    httponly=True,
+                    secure=True,
+                    samesite="none"
+                )
+    
     semaphore: asyncio.Semaphore = request.app.state.agent_semaphore
 
     try:
@@ -132,17 +142,7 @@ async def send_message(message: QueryID,
             headers={"Retry-After": "5"}
         )        
     try:
-            if not session_id or not is_valid_uuid(session_id):
-                session_id = str(get_uuid())
-                response.set_cookie(
-                    key="session_id",
-                    value=session_id,
-                    max_age=30 * 24 * 60 * 60,
-                    httponly=True,
-                    secure=True,
-                    samesite="none"
-                )
-
+            
             thread_id = hashlib.sha256(f"{session_id}:{message.chat_id}".encode()).hexdigest()
 
             agent = request.app.state.agent
