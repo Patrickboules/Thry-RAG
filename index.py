@@ -127,7 +127,7 @@ async def send_message(message: QueryID,
     semaphore: asyncio.Semaphore = request.app.state.agent_semaphore
     acquired = False
     try:
-        await asyncio.wait_for(semaphore.acquire(), timeout=2)
+        await asyncio.wait_for(semaphore.acquire(), timeout=10)
         acquired= True
 
     except asyncio.TimeoutError:
@@ -176,7 +176,7 @@ async def send_message(message: QueryID,
 
 @app.get("/health")
 async def health_check(request: Request):
-    db = request.state.agent.get_database_manager()
+    db = request.app.state.agent.get_database_manager()
     try:
         pool = db.get_pool()
         async with pool.connection() as conn:

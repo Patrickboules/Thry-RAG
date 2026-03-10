@@ -37,7 +37,7 @@ async def process_pdf(pdf_path: str) -> None:
         pages_split = text_splitter.split_documents(pages)
 
         try:
-            vector_space.add_documents(pages_split)
+            await vector_space.aadd_documents(pages_split)
             print(f"Successfully processed {len(pages_split)} chunks from {pdf_path}")
         except Exception as e:
             print(f"Error adding documents to PgVectorDB: {str(e)}")
