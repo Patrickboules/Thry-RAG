@@ -123,16 +123,16 @@ async def send_message(message: QueryID,
                        _: None = Depends(check_rate_limit)):
     
     semaphore: asyncio.Semaphore = request.app.state.agent_semaphore
-    acquired = semaphore._value > 0 
-    if not acquired:
+
+    try:
+        await asyncio.wait_for(semaphore.acquire(), timeout=0)
+    except asyncio.TimeoutError:
         raise HTTPException(
             status_code=503,
             detail="Server is at capacity. Please try again in a moment.",
             headers={"Retry-After": "5"}
-        )
-
-    async with semaphore:
-        try:
+        )        
+    try:
             if not session_id or not is_valid_uuid(session_id):
                 session_id = str(get_uuid())
                 response.set_cookie(
@@ -159,7 +159,7 @@ async def send_message(message: QueryID,
             return {"response": result['messages'][-1].content}
 
 
-        except asyncio.TimeoutError:
+    except asyncio.TimeoutError:
             # ✅ Catch timeout specifically and return clean 504
             logger.error("Agent timed out after 50 seconds")
             raise HTTPException(
@@ -167,15 +167,17 @@ async def send_message(message: QueryID,
                 detail="Request timed out. Please try again."
             )
         
-        except HTTPException:
+    except HTTPException:
             raise
 
-        except Exception as e:
+    except Exception as e:
             logger.error(f"Unexpected error in /chat endpoint: {str(e)}", exc_info=True)
             raise HTTPException(
                 status_code=500,
                 detail="An internal error occurred. Please try again later."
             )
+    finally:
+         semaphore.release()
 
 @app.get("/health")
 async def health_check():
