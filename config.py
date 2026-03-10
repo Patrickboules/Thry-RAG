@@ -10,7 +10,6 @@ def validateEnv():
         "DATABASE_URL",
         "GROQ_API_KEY",
         "ALLOWED_ORIGINS",
-        "THRY_API_KEY",
         "HUGGINGFACEHUB_API_TOKEN",
         "LANGSEARCH_API_KEY",
         "UPSTASH_REDIS_REST_TOKEN",
