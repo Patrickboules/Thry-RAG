@@ -132,9 +132,11 @@ async def send_message(message: QueryID,
                 )
     
     semaphore: asyncio.Semaphore = request.app.state.agent_semaphore
-
+    acquired = False
     try:
         await asyncio.wait_for(semaphore.acquire(), timeout=0)
+        acquired= True
+
     except asyncio.TimeoutError:
         raise HTTPException(
             status_code=503,
@@ -176,7 +178,8 @@ async def send_message(message: QueryID,
                 detail="An internal error occurred. Please try again later."
             )
     finally:
-         semaphore.release()
+         if acquired:
+            semaphore.release()
 
 @app.get("/health")
 async def health_check():
