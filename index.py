@@ -8,6 +8,7 @@ import sys
 import os
 import asyncio
 import logging
+import hashlib
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -143,7 +144,7 @@ async def send_message(message: QueryID,
                     samesite="none"
                 )
 
-            thread_id = f"{session_id}:{message.chat_id}"
+            thread_id = hashlib.sha256(f"{session_id}:{message.chat_id}".encode()).hexdigest()
 
             agent = request.app.state.agent
 
