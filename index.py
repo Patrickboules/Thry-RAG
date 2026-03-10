@@ -40,7 +40,6 @@ async def lifespan(app: FastAPI):
     logger.info("Application starting up...")
     # Initialize here — pool is open, event loop is running
     app.state.agent = ThryAgent()
-    await app.state.agent.initialize()
 
     app.state.agent_semaphore = asyncio.Semaphore(MAX_CONCURRENT_AGENT_CALLS)
 
