@@ -192,4 +192,3 @@ async def send_message(message: QueryID,
 async def health_check():
     """Health check endpoint for Render and monitoring.""" 
     return {"status": "ok", "service": "thry-backend"}
-
