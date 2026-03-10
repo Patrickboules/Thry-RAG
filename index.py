@@ -73,7 +73,7 @@ app.add_middleware(
     allow_origins=os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(","),
     allow_credentials=True,
     allow_methods=["POST"],
-    allow_headers=["Thry-Api-Key", "Content-Type"],
+    allow_headers=["Content-Type"],
 )
 
 @app.exception_handler(Exception)
