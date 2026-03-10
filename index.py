@@ -44,7 +44,6 @@ async def lifespan(app: FastAPI):
 
     app.state.agent_semaphore = asyncio.Semaphore(MAX_CONCURRENT_AGENT_CALLS)
 
-
     logger.info("Agent initialized successfully.")
     yield
     

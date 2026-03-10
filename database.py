@@ -1,8 +1,7 @@
-# database.py  — full revised file
-
 import logging
 import os
 import warnings
+import threading
 from typing import Optional
 
 from dotenv import load_dotenv
@@ -43,7 +42,7 @@ class Database:
         self.__sync_connection_pool = AsyncConnectionPool(
             conninfo=self.__dbconnection_string,
             max_size=10,
-            min_size=1,
+            min_size=0,
             reconnect_timeout=30,
             reconnect_failed=None,
             timeout=10,
@@ -93,17 +92,16 @@ class Database:
         return False
 
 _db_instance: Optional[Database] = None
+_db_lock = threading.Lock()
 
 
 def get_database() -> Database:
     """
-    Return the process-wide Database singleton.
-
-    Creating a new Database() spins up a connection pool and a SQLAlchemy
-    engine. Doing that on every call is a connection leak. The singleton
-    ensures exactly one pool exists for the lifetime of the process.
+    Return the process-wide Database singleton, thread-safely.
     """
     global _db_instance
     if _db_instance is None:
-        _db_instance = Database()
+        with _db_lock:
+            if _db_instance is None:
+                _db_instance = Database()
     return _db_instance
