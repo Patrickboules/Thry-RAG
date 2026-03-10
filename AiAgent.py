@@ -101,3 +101,6 @@ class ThryAgent:
     async def close(self):
         """Clean up database connections."""
         await self.__db_manager.close()
+
+    def get_database_manager(self):
+        return self.__db_manager

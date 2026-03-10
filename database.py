@@ -46,7 +46,7 @@ class Database:
             reconnect_timeout=30,
             reconnect_failed=None,
             timeout=10,
-            kwargs=self.__connection_kwargr,
+            kwargs=self.__connection_kwargs,
             open=False
         )
 
@@ -75,9 +75,8 @@ class Database:
         return self.__sync_connection_pool
     
     async def initialize(self):
-        if not self.__sync_connection_pool.closed:
-            return
-        await self.__sync_connection_pool.open()
+        if self.__sync_connection_pool.closed:
+            await self.__sync_connection_pool.open()
 
     async def close(self):
         try:

@@ -106,14 +106,6 @@ async def check_rate_limit(request: Request):
             headers={"Retry-After": "60"}
         )
 
-UUID_REGEX = re.compile(
-        r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
-        re.IGNORECASE
-)
-
-def is_valid_uuid(value: str) -> bool:
-        return bool(UUID_REGEX.match(value))    
-
 @app.post("/chat")
 async def send_message(message: QueryID,
                        response: Response,
@@ -121,7 +113,7 @@ async def send_message(message: QueryID,
                        session_id: str = Cookie(None),
                        _: None = Depends(check_rate_limit)):
     
-    if not session_id or not is_valid_uuid(session_id):
+    if not session_id:
                 session_id = str(get_uuid())
                 response.set_cookie(
                     key="session_id",
@@ -184,7 +176,7 @@ async def send_message(message: QueryID,
 
 @app.get("/health")
 async def health_check(request: Request):
-    db = request.app.state.agent.__db_manager
+    db = request.state.agent.get_database_manager()
     try:
         pool = db.get_pool()
         async with pool.connection() as conn:
