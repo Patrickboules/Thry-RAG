@@ -1,3 +1,5 @@
+# database.py  — full revised file
+
 import logging
 import os
 import warnings
@@ -6,7 +8,7 @@ from typing import Optional
 from dotenv import load_dotenv
 from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_postgres.vectorstores import PGVector
-from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver  
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -16,7 +18,6 @@ warnings.filterwarnings("ignore", message=".*PyTorch.*")
 warnings.filterwarnings("ignore", message=".*TensorFlow.*")
 
 load_dotenv()
-
 logger = logging.getLogger(__name__)
 
 
@@ -33,22 +34,21 @@ class Database:
         }
 
         sa_url = (
-    self.__dbconnection_string
-    .replace("postgresql://", "postgresql+psycopg://")
-    .replace("postgresql+psycopg2://", "postgresql+psycopg://")
-)
+            self.__dbconnection_string
+            .replace("postgresql://", "postgresql+psycopg://")
+            .replace("postgresql+psycopg2://", "postgresql+psycopg://")
+        )
         self.__sa_engine = create_async_engine(sa_url, poolclass=NullPool)
 
-        # Open the pool explicitly so it's ready before first request.
         self.__sync_connection_pool = AsyncConnectionPool(
             conninfo=self.__dbconnection_string,
             max_size=10,
-            min_size=1,            # keep at least 1 connection warm on Render
+            min_size=1,
             reconnect_timeout=30,
             reconnect_failed=None,
             timeout=10,
             kwargs=self.__connection_kwargs,
-            open=False,             
+            open=False,
         )
 
         self.__embeddings: Optional[HuggingFaceEndpointEmbeddings] = HuggingFaceEndpointEmbeddings(
@@ -57,45 +57,54 @@ class Database:
         self.__vector_db: Optional[PGVector] = PGVector(
             connection=self.__sa_engine,
             embeddings=self.__embeddings,
-            collection_name='thry_rag'
+            collection_name="thry_rag",
+        )
+        self.__checkpointer: Optional[AsyncPostgresSaver] = AsyncPostgresSaver(
+            self.__sync_connection_pool
         )
 
-        self.__checkpointer: Optional[AsyncPostgresSaver] = AsyncPostgresSaver(self.__sync_connection_pool)
-
-
-    def get_pgvector(self) -> Optional[PGVector]:
+    def get_pgvector(self) -> PGVector:
         return self.__vector_db
 
-    def get_embeddings(self) -> Optional[HuggingFaceEndpointEmbeddings]:
+    def get_embeddings(self) -> HuggingFaceEndpointEmbeddings:
         return self.__embeddings
 
-    def get_PostgresSaver(self) -> Optional[AsyncPostgresSaver]:
+    def get_PostgresSaver(self) -> AsyncPostgresSaver:
         return self.__checkpointer
 
-    def get_pool(self) -> Optional[AsyncConnectionPool]:
+    def get_pool(self) -> AsyncConnectionPool:
         return self.__sync_connection_pool
 
     async def close(self):
         try:
-            if hasattr(self, '_Database__sync_connection_pool') and self.__sync_connection_pool:
-                if not self.__sync_connection_pool.closed:
-                    await self.__sync_connection_pool.close()
+            if not self.__sync_connection_pool.closed:
+                await self.__sync_connection_pool.close()
         except Exception:
             logger.warning("Error closing psycopg pool", exc_info=True)
-
         try:
-            if hasattr(self, '_Database__sa_engine') and self.__sa_engine:
-                await self.__sa_engine.dispose()  # await instead of sync .dispose()
+            await self.__sa_engine.dispose()
         except Exception:
             logger.warning("Error disposing SQLAlchemy engine", exc_info=True)
 
-    async def __enter__(self):
+    async def __aenter__(self):
         return self
 
-    async def __exit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.close()
         return False
 
+_db_instance: Optional[Database] = None
+
 
 def get_database() -> Database:
-    return Database()
+    """
+    Return the process-wide Database singleton.
+
+    Creating a new Database() spins up a connection pool and a SQLAlchemy
+    engine. Doing that on every call is a connection leak. The singleton
+    ensures exactly one pool exists for the lifetime of the process.
+    """
+    global _db_instance
+    if _db_instance is None:
+        _db_instance = Database()
+    return _db_instance

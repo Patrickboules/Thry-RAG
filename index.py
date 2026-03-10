@@ -7,6 +7,7 @@ import re
 import sys
 import os
 import asyncio
+import logging
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -20,9 +21,7 @@ from contextlib import asynccontextmanager
 
 from AiAgent import ThryAgent
 from config import validateEnv, get_uuid
-from pydantic import BaseModel, field_validator
-import logging
-import hmac
+from domain import QueryID
 
 logging.basicConfig(
     level=logging.INFO,
@@ -30,33 +29,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
-class QueryID(BaseModel):
-    query: str
-    chat_id: str
-
-    @field_validator('query')
-    @classmethod
-    def validate_query(cls, v: str) -> str:
-        if not v or not v.strip():
-            raise ValueError('Query cannot be empty')
-        if len(v) > 5000:
-            raise ValueError('Query too long (max 5000 characters)')
-        return v.strip()
-
-    @field_validator('chat_id')
-    @classmethod
-    def validate_chat_id(cls, v: str) -> str:
-        v = v.strip()
-        if not v:
-            raise ValueError('Chat ID cannot be empty')
-        if not re.match(r'^[a-zA-Z0-9_\-]{1,64}$', v):  # only safe characters
-            raise ValueError('Chat ID contains invalid characters')
-        return v
-
 validateEnv()
 
 redis = Redis.from_env()
+
+MAX_CONCURRENT_AGENT_CALLS = 8
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -64,6 +41,9 @@ async def lifespan(app: FastAPI):
     # Initialize here — pool is open, event loop is running
     app.state.agent = ThryAgent()
     await app.state.agent.initialize()
+
+    app.state.agent_semaphore = asyncio.Semaphore(MAX_CONCURRENT_AGENT_CALLS)
+
 
     logger.info("Agent initialized successfully.")
     yield
@@ -142,51 +122,60 @@ async def send_message(message: QueryID,
                        session_id: str = Cookie(None),
                        _: None = Depends(check_rate_limit)):
     
+    semaphore: asyncio.Semaphore = request.app.state.agent_semaphore
+    acquired = semaphore._value > 0 
+    if not acquired:
+        raise HTTPException(
+            status_code=503,
+            detail="Server is at capacity. Please try again in a moment.",
+            headers={"Retry-After": "5"}
+        )
 
-    try:
-        if not session_id or not is_valid_uuid(session_id):
-            session_id = str(get_uuid())
-            response.set_cookie(
-                key="session_id",
-                value=session_id,
-                max_age=30 * 24 * 60 * 60,
-                httponly=True,
-                secure=True,
-                samesite="none"
+    async with semaphore:
+        try:
+            if not session_id or not is_valid_uuid(session_id):
+                session_id = str(get_uuid())
+                response.set_cookie(
+                    key="session_id",
+                    value=session_id,
+                    max_age=30 * 24 * 60 * 60,
+                    httponly=True,
+                    secure=True,
+                    samesite="none"
+                )
+
+            thread_id = f"{session_id}:{message.chat_id}"
+
+            agent = request.app.state.agent
+
+            result = await asyncio.wait_for(
+                agent.run(message.query, thread_id),50
             )
 
-        thread_id = f"{session_id}:{message.chat_id}"
+            if not result or 'messages' not in result or not result["messages"]:
+                logger.error("Agent returned invalid result")
+                raise HTTPException(status_code=500, detail="Failed to generate response")
 
-        agent = request.app.state.agent
-
-        result = await asyncio.wait_for(
-            agent.run(message.query, thread_id),50
-        )
-
-        if not result or 'messages' not in result or not result["messages"]:
-            logger.error("Agent returned invalid result")
-            raise HTTPException(status_code=500, detail="Failed to generate response")
-
-        return {"response": result['messages'][-1].content}
+            return {"response": result['messages'][-1].content}
 
 
-    except asyncio.TimeoutError:
-        # ✅ Catch timeout specifically and return clean 504
-        logger.error("Agent timed out after 50 seconds")
-        raise HTTPException(
-            status_code=504,
-            detail="Request timed out. Please try again."
-        )
-    
-    except HTTPException:
-        raise
+        except asyncio.TimeoutError:
+            # ✅ Catch timeout specifically and return clean 504
+            logger.error("Agent timed out after 50 seconds")
+            raise HTTPException(
+                status_code=504,
+                detail="Request timed out. Please try again."
+            )
+        
+        except HTTPException:
+            raise
 
-    except Exception as e:
-        logger.error(f"Unexpected error in /chat endpoint: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail="An internal error occurred. Please try again later."
-        )
+        except Exception as e:
+            logger.error(f"Unexpected error in /chat endpoint: {str(e)}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail="An internal error occurred. Please try again later."
+            )
 
 @app.get("/health")
 async def health_check():
