@@ -40,6 +40,7 @@ MAX_CONCURRENT_AGENT_CALLS = 8
 async def lifespan(app: FastAPI):
     logger.info("Application starting up...")
     app.state.agent = ThryAgent()
+    await app.state.agent.openConnection()
 
     app.state.agent_semaphore = asyncio.Semaphore(MAX_CONCURRENT_AGENT_CALLS)
 
@@ -134,7 +135,7 @@ async def send_message(message: QueryID,
     semaphore: asyncio.Semaphore = request.app.state.agent_semaphore
     acquired = False
     try:
-        await asyncio.wait_for(semaphore.acquire(), timeout=0)
+        await asyncio.wait_for(semaphore.acquire(), timeout=2)
         acquired= True
 
     except asyncio.TimeoutError:
@@ -182,6 +183,23 @@ async def send_message(message: QueryID,
             semaphore.release()
 
 @app.get("/health")
-async def health_check():
-    """Health check endpoint for Render and monitoring.""" 
-    return {"status": "ok", "service": "thry-backend"}
+async def health_check(request: Request):
+    db = request.app.state.agent.__db_manager
+    try:
+        pool = db.get_pool()
+        async with pool.connection() as conn:
+            await conn.execute("SELECT 1")
+        db_status = "ok"
+    except Exception as e:
+        logger.error(f"Health check DB probe failed: {e}")
+        db_status = "unreachable"
+
+    healthy = db_status == "ok"
+    return JSONResponse(
+        status_code=200 if healthy else 503,
+        content={
+            "status": "ok" if healthy else "degraded",
+            "service": "thry-backend",
+            "database": db_status
+        }
+    )

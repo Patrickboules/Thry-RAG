@@ -42,11 +42,12 @@ class Database:
         self.__sync_connection_pool = AsyncConnectionPool(
             conninfo=self.__dbconnection_string,
             max_size=10,
-            min_size=0,
+            min_size=1,
             reconnect_timeout=30,
             reconnect_failed=None,
             timeout=10,
-            kwargs=self.__connection_kwargs,
+            kwargs=self.__connection_kwargr,
+            open=False
         )
 
         self.__embeddings: Optional[HuggingFaceEndpointEmbeddings] = HuggingFaceEndpointEmbeddings(
@@ -72,6 +73,11 @@ class Database:
 
     def get_pool(self) -> AsyncConnectionPool:
         return self.__sync_connection_pool
+    
+    async def initialize(self):
+        if not self.__sync_connection_pool.closed:
+            return
+        await self.__sync_connection_pool.open()
 
     async def close(self):
         try:

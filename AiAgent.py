@@ -95,6 +95,9 @@ class ThryAgent:
         except Exception:
             raise
 
+    async def openConnection(self):
+        await  self.__db_manager.initialize()
+   
     async def close(self):
         """Clean up database connections."""
         await self.__db_manager.close()
