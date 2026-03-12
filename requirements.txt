@@ -104,6 +104,7 @@ upstash-redis==1.6.0
 uritemplate==4.2.0
 urllib3==2.6.3
 uuid_utils==0.14.0
+uvicorn
 websockets==15.0.1
 wheel==0.46.3
 wrapt==2.1.0
